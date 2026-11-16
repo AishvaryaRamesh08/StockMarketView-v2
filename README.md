@@ -2,6 +2,8 @@
 
 Free live stock charts for India (NSE, BSE) and the US (NYSE, NASDAQ). No sign-up, no ads, no paywall.
 
+**Live site: https://stockmarketview-v2.aishvaryaramesh.workers.dev**
+
 This is a rebuild of [StockMarketView v1](https://github.com/AishvaryaRamesh08/StockMarketView) (2021, Python Dash + Plotly + TA-Lib),
 which I wrote by hand during my undergrad degree. v2 is being built with AI-assisted development; a v1-vs-v2 comparison will be
 added when the build is complete.
