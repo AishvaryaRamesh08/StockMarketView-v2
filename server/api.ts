@@ -1,5 +1,5 @@
 /**
- * Data API shared by the Cloudflare Pages Function (production) and the Vite dev middleware.
+ * Data API shared by the Cloudflare Worker (production) and the Vite dev middleware.
  *
  *   GET /api/chart?symbol=RELIANCE.NS&range=6mo&interval=1d
  *   GET /api/quotes?symbols=^NSEI,^GSPC,AAPL        (up to 20 symbols, one upstream call)
@@ -71,6 +71,8 @@ class UpstreamError extends Error {
 
 interface YahooMeta {
   symbol: string;
+  /** Exchange's UTC offset in seconds (IST = 19800). */
+  gmtoffset?: number;
   currency?: string;
   longName?: string;
   shortName?: string;
@@ -128,10 +130,18 @@ function toQuote(meta: YahooMeta, prevClose: number | null): Quote {
  * the close before the whole *range*, so it only means "yesterday" for a 1-day range.
  * The frontend takes day change from /api/quotes (always a 1-day range) when this is null.
  */
-function dailyPrevClose(candles: Candle[], meta: YahooMeta, interval: string, range: string): number | null {
+export function dailyPrevClose(candles: Candle[], meta: YahooMeta, interval: string, range: string): number | null {
   if (meta.previousClose != null) return meta.previousClose;
   if (range === '1d') return meta.chartPreviousClose ?? null;
-  if (interval === '1d' && candles.length >= 2) return candles[candles.length - 2].c;
+  if (interval === '1d' && candles.length > 0 && meta.regularMarketTime != null) {
+    // The close of the last daily candle from *before* the latest price's trading day.
+    // Don't just take the second-to-last candle: Yahoo sometimes sends today's candle empty,
+    // and that candle is dropped, which would shift "yesterday" back a day.
+    const off = meta.gmtoffset ?? 0;
+    const day = (t: number) => Math.floor((t + off) / 86400);
+    const today = day(meta.regularMarketTime);
+    for (let i = candles.length - 1; i >= 0; i--) if (day(candles[i].t) < today) return candles[i].c;
+  }
   return null;
 }
 

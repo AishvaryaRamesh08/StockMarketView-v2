@@ -11,9 +11,13 @@ export function mergeCandles(history: Candle[], fresh: Candle[]): Candle[] {
   const from = fresh[0].t;
   // Fresh data older than our history means the poll returned something unexpected; keep what we have.
   if (from < history[0].t) return history;
+  const to = fresh[fresh.length - 1].t;
   let cut = history.length;
   while (cut > 0 && history[cut - 1].t >= from) cut--;
-  return history.slice(0, cut).concat(fresh);
+  // Keep any bars newer than the poll returned: providers occasionally omit the latest
+  // candle from a short range, and a refresh must never delete data we already have.
+  const newer = history.filter((c) => c.t > to);
+  return history.slice(0, cut).concat(fresh, newer);
 }
 
 /**

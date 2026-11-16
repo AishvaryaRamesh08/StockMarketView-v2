@@ -40,7 +40,7 @@ Upcoming earnings dates are not shown: Yahoo only serves them to logged-in sessi
 Browser (React + Lightweight Charts)
    │  full history once, then the latest candles every 30s
    ▼
-/api/*  Cloudflare Pages Function (functions/api/[[route]].ts → server/api.ts)
+/api/*  Cloudflare Worker (worker/index.ts → server/api.ts)
    │  edge cache: 20s for live ranges, 5 min for long history
    ▼
 Yahoo Finance chart + spark endpoints
@@ -60,7 +60,7 @@ Prices are labelled "refreshed every 30s", never "real-time": Yahoo's feed is un
 
 ```
 server/api.ts             Data API (Yahoo-specific code lives only here, so the provider can be swapped)
-functions/api/[[route]].ts Cloudflare Pages Function entry
+worker/index.ts           Cloudflare Worker entry: /api/* to the data API, everything else to dist/
 src/lib/                  Indicators, patterns, key levels, summary, market hours, period/interval rules,
                           candle merging, search, formatting (all with tests)
 src/data/holidays.ts      NSE/BSE and NYSE/NASDAQ holiday calendars; update yearly
@@ -82,17 +82,21 @@ Refresh the ticker list (NSE official list + v1's BSE list + NASDAQ Trader direc
 
 ## Deploying (free)
 
-Cloudflare Pages hosts the site and the `/api` function on the free plan (100,000 function requests per day),
-and redeploys automatically on every push to `main`.
+The site runs as one **Cloudflare Worker** on the free plan: static files in `dist/` are served by
+Cloudflare's asset hosting (free, unmetered) and only `/api/*` runs the Worker (100,000 requests per day).
+Cloudflare rebuilds and redeploys on every push to `main`.
 
 One-time setup in the Cloudflare dashboard:
 
-1. **Workers & Pages → Create → Pages → Connect to Git**, and pick this repository.
-2. Build settings: framework preset **None**, build command `npm run build`, output directory `dist`.
-3. Save and deploy. The site goes live at `https://<project-name>.pages.dev`.
+1. **Workers & Pages → Create → Import a repository**, and pick this repository.
+2. Project name `stockmarketview-v2` (must match `name` in `wrangler.toml`), build command `npm run build`,
+   deploy command `npx wrangler deploy`.
+3. Deploy. The site goes live at `https://stockmarketview-v2.<your-subdomain>.workers.dev`.
 
-The `functions/` folder is deployed with the site automatically, and `.node-version` pins Node 22 for the build.
-Pull requests get their own preview URL. GitHub Actions (`.github/workflows/ci.yml`) runs the tests on every push.
+`wrangler.toml` configures the Worker (`worker/index.ts`) and asset serving; `.node-version` pins Node 22 for the build.
+GitHub Actions (`.github/workflows/ci.yml`) runs the tests on every push.
+
+To run the production Worker locally: `npm run build && npx wrangler dev`.
 
 ## Keeping data accurate
 

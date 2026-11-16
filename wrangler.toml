@@ -1,4 +1,13 @@
-# Cloudflare Pages project. `functions/` is deployed automatically alongside the static site.
-name = "stockmarketview"
-pages_build_output_dir = "dist"
+# Cloudflare Worker: serves the built site from dist/ and the data API at /api/*.
+# `name` must match the Worker's name in the Cloudflare dashboard.
+name = "stockmarketview-v2"
+main = "worker/index.ts"
 compatibility_date = "2026-11-01"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+# Unknown paths fall back to index.html (single-page app).
+not_found_handling = "single-page-application"
+# Only API calls run the Worker; static files are served directly.
+run_worker_first = ["/api/*"]
