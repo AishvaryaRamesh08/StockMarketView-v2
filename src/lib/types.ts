@@ -28,6 +28,16 @@ export interface Quote {
   /** Unix seconds of the last trade the provider reported. */
   marketTime: number | null;
   priceHint: number;
+  /** Today's intraday closes (5-minute), only on /api/quotes, for watchlist sparklines. */
+  spark?: number[];
+}
+
+/** A dividend or split, at Unix seconds `t`. */
+export interface CorporateEvent {
+  t: number;
+  kind: 'dividend' | 'split';
+  /** Dividend amount per share, or split ratio such as "2:1". */
+  value: string;
 }
 
 export interface ChartResponse {
@@ -35,10 +45,22 @@ export interface ChartResponse {
   range: string;
   interval: string;
   candles: Candle[];
+  events: CorporateEvent[];
 }
 
 export interface QuotesResponse {
   quotes: Quote[];
+}
+
+/** Slow-changing company data. Every field is optional: the UI hides what is missing. */
+export interface Profile {
+  symbol: string;
+  sector?: string;
+  industry?: string;
+  marketCap?: number;
+  pe?: number;
+  /** Symbols Yahoo considers related, used for "similar stocks" in Phase 3. */
+  related?: string[];
 }
 
 export interface ApiError {

@@ -107,6 +107,24 @@ function ymdIn(tz: string, date: Date): string {
   return `${p.y}-${String(p.m).padStart(2, '0')}-${String(p.d).padStart(2, '0')}`;
 }
 
+/**
+ * Maps a bar's Unix-seconds timestamp to its exchange-local trading date ("2026-11-16"),
+ * i.e. its session. Cached per UTC hour, which is exact because no exchange changes date
+ * mid-hour.
+ */
+export function sessionKeyFn(tz: string): (t: number) => string {
+  const cache = new Map<number, string>();
+  return (t: number) => {
+    const hour = Math.floor(t / 3600);
+    let k = cache.get(hour);
+    if (k === undefined) {
+      k = ymdIn(tz, new Date(t * 1000));
+      cache.set(hour, k);
+    }
+    return k;
+  };
+}
+
 function addDays(ymd: string, n: number): string {
   const [y, m, d] = ymd.split('-').map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d + n));

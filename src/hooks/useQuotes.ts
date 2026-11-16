@@ -5,25 +5,31 @@ import type { Quote } from '../lib/types.ts';
 import { CLOSED_MS, LIVE_MS, usePolling } from './usePolling.ts';
 import { useNow } from './useNow.ts';
 
+const BATCH = 20;
+
 /**
- * Live quotes for a set of symbols in ONE request per refresh (up to 20 symbols).
+ * Live quotes for a set of symbols, fetched 20 per request (the API's batch size) so the index
+ * strip, the open chart and a whole watchlist cost one to three requests per refresh.
  * Refreshes every 30s while any of their markets is open, every 5 minutes otherwise.
  */
 export function useQuotes(symbols: string[]): { quotes: Record<string, Quote>; lastUpdated: number | null } {
-  const list = useMemo(() => Array.from(new Set(symbols)).slice(0, 20), [symbols.join(',')]);
+  const key = Array.from(new Set(symbols)).join(',');
+  const list = useMemo(() => (key ? key.split(',') : []), [key]);
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
 
   const refresh = useCallback(
     async (signal: AbortSignal) => {
       if (list.length === 0) return;
-      const res = await fetchQuotes(list, signal);
+      const batches: string[][] = [];
+      for (let i = 0; i < list.length; i += BATCH) batches.push(list.slice(i, i + BATCH));
+      const results = await Promise.allSettled(batches.map((b) => fetchQuotes(b, signal)));
       setQuotes((prev) => {
         const next = { ...prev };
-        for (const q of res.quotes) next[q.symbol] = q;
+        for (const r of results) if (r.status === 'fulfilled') for (const q of r.value.quotes) next[q.symbol] = q;
         return next;
       });
-      setLastUpdated(Date.now());
+      if (results.some((r) => r.status === 'fulfilled')) setLastUpdated(Date.now());
     },
     [list],
   );

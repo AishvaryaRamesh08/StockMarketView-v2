@@ -1,16 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNow } from '../hooks/useNow.ts';
-import { digitsFor, formatAgo, formatChange, formatLocalTime, formatPct, formatPrice, formatVolume } from '../lib/format.ts';
+import { digitsFor, formatAgo, formatChange, formatLocalTime, formatMarketCap, formatPct, formatPrice, formatVolume } from '../lib/format.ts';
 import { marketOf, marketStatus } from '../lib/markets.ts';
-import type { Quote } from '../lib/types.ts';
+import type { Profile, Quote } from '../lib/types.ts';
+import { InfoTip } from './InfoTip.tsx';
 import { MarketStatusPill } from './MarketStatusPills.tsx';
 
 interface Props {
   symbol: string;
   quote: Quote | null;
+  profile: Profile | null;
   loading: boolean;
   lastUpdated: number | null;
   refreshError: string | null;
+  watched: boolean;
+  watchlistName: string;
+  onToggleWatch: () => void;
 }
 
 /** Briefly flashes green/red when the price changes. */
@@ -56,7 +61,7 @@ function Freshness({ symbol, lastUpdated, refreshError, quote }: { symbol: strin
   );
 }
 
-export function QuoteHeader({ symbol, quote, loading, lastUpdated, refreshError }: Props) {
+export function QuoteHeader({ symbol, quote, profile, loading, lastUpdated, refreshError, watched, watchlistName, onToggleWatch }: Props) {
   const flash = useFlash(quote?.price);
   const market = marketOf(symbol);
 
@@ -85,7 +90,20 @@ export function QuoteHeader({ symbol, quote, loading, lastUpdated, refreshError 
   return (
     <header className="quote-header">
       <div className="quote-title">
-        <h1>{quote.name}</h1>
+        <div className="quote-name-row">
+          <h1>{quote.name}</h1>
+          <button
+            className={`star-btn ${watched ? 'on' : ''}`}
+            onClick={onToggleWatch}
+            aria-pressed={watched}
+            title={watched ? `Remove from “${watchlistName}”` : `Add to “${watchlistName}”`}
+            aria-label={watched ? `Remove from watchlist ${watchlistName}` : `Add to watchlist ${watchlistName}`}
+          >
+            <svg viewBox="0 0 20 20" aria-hidden>
+              <path d="M10 2.5l2.3 4.8 5.2.7-3.8 3.6.9 5.2L10 14.3l-4.6 2.5.9-5.2L2.5 8l5.2-.7z" />
+            </svg>
+          </button>
+        </div>
         <div className="quote-meta">
           <span className="ticker">{symbol.replace(/\.(NS|BO)$/, '')}</span>
           <span className="badge">{quote.exchange || (market === 'IN' ? 'India' : 'US')}</span>
@@ -129,6 +147,35 @@ export function QuoteHeader({ symbol, quote, loading, lastUpdated, refreshError 
                 <span className="range-marker" style={{ left: `${range52}%` }} />
               </span>
               <span>{formatPrice(quote.high52, quote.currency, digits, false)}</span>
+            </dd>
+          </div>
+        )}
+        {profile?.marketCap != null && (
+          <div>
+            <dt>
+              <InfoTip text="Market capitalisation: share price × number of shares, the total value the market puts on the company.">
+                <span tabIndex={0}>Market cap</span>
+              </InfoTip>
+            </dt>
+            <dd className="num">{formatMarketCap(profile.marketCap, quote.currency)}</dd>
+          </div>
+        )}
+        {profile?.pe != null && (
+          <div>
+            <dt>
+              <InfoTip text="Price-to-earnings ratio (trailing 12 months): how many years of current profits the share price represents. Compare it with similar companies, not across sectors.">
+                <span tabIndex={0}>P/E</span>
+              </InfoTip>
+            </dt>
+            <dd className="num">{profile.pe.toFixed(1)}</dd>
+          </div>
+        )}
+        {profile?.sector && (
+          <div>
+            <dt>Sector</dt>
+            <dd>
+              {profile.sector}
+              {profile.industry && <span className="dd-sub"> · {profile.industry}</span>}
             </dd>
           </div>
         )}

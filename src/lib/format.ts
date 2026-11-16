@@ -44,6 +44,18 @@ export function formatVolume(value: number | null | undefined, currency: string)
   return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(value);
 }
 
+/** ₹18.21 L Cr (lakh crore) for India, $5.18T for the US. */
+export function formatMarketCap(value: number | null | undefined, currency: string): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  if (currency === 'INR') {
+    const crore = value / 1e7;
+    if (crore >= 1e5) return `₹${(crore / 1e5).toFixed(2)} L Cr`;
+    return `₹${Math.round(crore).toLocaleString('en-IN')} Cr`;
+  }
+  const sym = currency === 'USD' ? '$' : '';
+  return sym + new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(value);
+}
+
 export function formatAgo(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
   if (s < 5) return 'just now';

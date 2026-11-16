@@ -8,7 +8,7 @@
  * share one Yahoo request. All Yahoo-specific code lives in this file, so the provider can be
  * swapped without touching the frontend.
  */
-import type { ChartResponse, Candle, Quote, QuotesResponse, ApiError } from '../src/lib/types.ts';
+import type { ChartResponse, Candle, CorporateEvent, Quote, QuotesResponse, ApiError, Profile } from '../src/lib/types.ts';
 
 const RANGES = ['1d', '5d', '1mo', '3mo', '6mo', 'ytd', '1y', '5y', '10y', 'max'] as const;
 const INTERVALS = ['1m', '2m', '5m', '15m', '30m', '60m', '1d', '1wk', '1mo'] as const;
@@ -92,6 +92,10 @@ interface YahooMeta {
 interface YahooChartResult {
   meta: YahooMeta;
   timestamp?: number[];
+  events?: {
+    dividends?: Record<string, { amount: number; date: number }>;
+    splits?: Record<string, { date: number; numerator: number; denominator: number }>;
+  };
   indicators: { quote: Array<{ open: (number | null)[]; high: (number | null)[]; low: (number | null)[]; close: (number | null)[]; volume: (number | null)[] }> };
 }
 
@@ -176,11 +180,17 @@ async function chart(params: URLSearchParams): Promise<Response> {
   }
   foldLiveTick(candles, interval);
 
+  const events: CorporateEvent[] = [];
+  for (const d of Object.values(result.events?.dividends ?? {})) events.push({ t: d.date, kind: 'dividend', value: String(d.amount) });
+  for (const s of Object.values(result.events?.splits ?? {})) events.push({ t: s.date, kind: 'split', value: `${s.numerator}:${s.denominator}` });
+  events.sort((a, b) => a.t - b.t);
+
   const body: ChartResponse = {
     quote: toQuote(result.meta, dailyPrevClose(candles, result.meta, interval, range)),
     range,
     interval,
     candles,
+    events,
   };
   return json(body, 200, ttlFor(range));
 }
@@ -200,13 +210,71 @@ async function quotes(params: URLSearchParams): Promise<Response> {
     `/v7/finance/spark?symbols=${symbols.map(encodeURIComponent).join(',')}&range=1d&interval=5m`,
   )) as { spark?: { result?: Array<{ symbol: string; response?: Array<{ meta: YahooMeta; indicators?: { quote?: Array<{ close?: (number | null)[] }> } }> }> } };
 
+
   const out: Quote[] = [];
   for (const r of data.spark?.result ?? []) {
     const resp = r.response?.[0];
     if (!resp) continue;
-    out.push(toQuote(resp.meta, resp.meta.previousClose ?? resp.meta.chartPreviousClose ?? null));
+    const q = toQuote(resp.meta, resp.meta.previousClose ?? resp.meta.chartPreviousClose ?? null);
+    const closes = (resp.indicators?.quote?.[0]?.close ?? []).filter((c): c is number => c != null);
+    // A sparkline needs ~60 points at most; round to keep the payload small.
+    const step = Math.max(1, Math.ceil(closes.length / 60));
+    q.spark = closes.filter((_, i) => i % step === 0 || i === closes.length - 1).map((c) => +c.toFixed(4));
+    out.push(q);
   }
   return json({ quotes: out } satisfies QuotesResponse, 200, 20);
+}
+
+/* --------------------------------- profile --------------------------------- */
+
+/**
+ * Sector, industry, market cap, P/E and related symbols, from Yahoo endpoints that work
+ * without a login. Each source is optional; whatever fails is simply left out.
+ * Cached for 6 hours because none of it changes during the day.
+ */
+async function profile(params: URLSearchParams): Promise<Response> {
+  const symbol = params.get('symbol') ?? '';
+  if (!SYMBOL_RE.test(symbol)) return fail(400, 'Invalid symbol');
+  const now = Math.floor(Date.now() / 1000);
+  const enc = encodeURIComponent(symbol);
+
+  const [search, series, related] = await Promise.allSettled([
+    upstream(`/v1/finance/search?q=${enc}&quotesCount=5&newsCount=0&listsCount=0`),
+    upstream(`/ws/fundamentals-timeseries/v1/finance/timeseries/${enc}?type=trailingPeRatio,trailingMarketCap&period1=${now - 30 * 86400}&period2=${now}`),
+    upstream(`/v6/finance/recommendationsbysymbol/${enc}`),
+  ]);
+
+  const out: Profile = { symbol };
+
+  if (search.status === 'fulfilled') {
+    const quotes = (search.value as { quotes?: Array<{ symbol: string; sectorDisp?: string; sector?: string; industryDisp?: string; industry?: string }> }).quotes ?? [];
+    const match = quotes.find((q) => q.symbol.toUpperCase() === symbol.toUpperCase());
+    if (match) {
+      out.sector = match.sectorDisp ?? match.sector;
+      out.industry = match.industryDisp ?? match.industry;
+    }
+  }
+
+  if (series.status === 'fulfilled') {
+    type Point = { reportedValue?: { raw?: number } };
+    const results = (series.value as { timeseries?: { result?: Array<Record<string, unknown> & { meta?: { type?: string[] } }> } }).timeseries?.result ?? [];
+    for (const r of results) {
+      const type = r.meta?.type?.[0];
+      const points = (type ? (r[type] as Point[] | undefined) : undefined) ?? [];
+      const latest = points.filter((p) => p?.reportedValue?.raw != null).at(-1)?.reportedValue?.raw;
+      if (latest == null) continue;
+      if (type === 'trailingPeRatio') out.pe = latest;
+      if (type === 'trailingMarketCap') out.marketCap = latest;
+    }
+  }
+
+  if (related.status === 'fulfilled') {
+    const rec = (related.value as { finance?: { result?: Array<{ recommendedSymbols?: Array<{ symbol: string }> }> } }).finance?.result?.[0];
+    const syms = rec?.recommendedSymbols?.map((s) => s.symbol).filter((s) => SYMBOL_RE.test(s));
+    if (syms?.length) out.related = syms;
+  }
+
+  return json(out, 200, 6 * 3600);
 }
 
 /* --------------------------------- router ---------------------------------- */
@@ -229,6 +297,7 @@ export async function handleApi(request: Request, waitUntil?: (p: Promise<unknow
   try {
     if (route === 'chart') res = await chart(url.searchParams);
     else if (route === 'quotes') res = await quotes(url.searchParams);
+    else if (route === 'profile') res = await profile(url.searchParams);
     else res = fail(404, 'Unknown endpoint');
   } catch (err) {
     const status = err instanceof UpstreamError ? err.status : 0;

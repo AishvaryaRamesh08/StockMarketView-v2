@@ -2,11 +2,22 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { POPULAR, loadSymbols, searchSymbols, type MarketFilter, type SymbolEntry } from '../lib/search.ts';
 import { load, save } from '../lib/storage.ts';
 
+export type SearchMode = 'chart' | 'compare' | 'watchlist';
+
 interface Props {
   open: boolean;
+  mode?: SearchMode;
+  /** Shown in the header, e.g. the watchlist name. */
+  context?: string;
   onClose: () => void;
   onSelect: (symbol: string) => void;
 }
+
+const MODE_TITLE: Record<SearchMode, (ctx?: string) => string | null> = {
+  chart: () => null,
+  compare: () => 'Add a stock or index to compare',
+  watchlist: (ctx) => `Add to watchlist${ctx ? ` “${ctx}”` : ''}`,
+};
 
 const FILTERS: Array<{ id: MarketFilter; label: string }> = [
   { id: 'ALL', label: 'All' },
@@ -23,7 +34,7 @@ export function rememberRecent(symbol: string): void {
   save(RECENT_KEY, [symbol, ...recent].slice(0, 8));
 }
 
-export function SearchPalette({ open, onClose, onSelect }: Props) {
+export function SearchPalette({ open, mode = 'chart', context, onClose, onSelect }: Props) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<MarketFilter>('ALL');
   const [entries, setEntries] = useState<SymbolEntry[] | null>(null);
@@ -70,10 +81,11 @@ export function SearchPalette({ open, onClose, onSelect }: Props) {
 
   const choose = (e: SymbolEntry | undefined) => {
     if (!e) return;
-    rememberRecent(e.symbol);
+    if (mode === 'chart') rememberRecent(e.symbol);
     onSelect(e.symbol);
     onClose();
   };
+  const title = MODE_TITLE[mode](context);
 
   const onKey = (ev: React.KeyboardEvent) => {
     if (ev.key === 'ArrowDown') {
@@ -96,7 +108,8 @@ export function SearchPalette({ open, onClose, onSelect }: Props) {
 
   return (
     <div className="palette-backdrop" onMouseDown={onClose}>
-      <div className="palette" role="dialog" aria-modal="true" aria-label="Search stocks" onMouseDown={(e) => e.stopPropagation()} onKeyDown={onKey}>
+      <div className="palette" role="dialog" aria-modal="true" aria-label={title ?? 'Search stocks'} onMouseDown={(e) => e.stopPropagation()} onKeyDown={onKey}>
+        {title && <div className="palette-title">{title}</div>}
         <div className="palette-input-row">
           <svg className="palette-icon" viewBox="0 0 24 24" aria-hidden>
             <circle cx="11" cy="11" r="7" />
