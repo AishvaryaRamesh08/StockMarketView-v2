@@ -82,14 +82,17 @@ Refresh the ticker list (NSE official list + v1's BSE list + NASDAQ Trader direc
 
 ## Deploying (free)
 
-Cloudflare Pages hosts the site and the `/api` function on the free plan (100,000 function requests per day).
+Cloudflare Pages hosts the site and the `/api` function on the free plan (100,000 function requests per day),
+and redeploys automatically on every push to `main`.
 
-1. Create a free Cloudflare account, then **Workers & Pages → Create → Pages → Direct upload**, and name the project `stockmarketview`.
-2. Create an API token with the **Cloudflare Pages: Edit** permission.
-3. In the GitHub repository, add secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
-4. Push to `main`. The workflow runs the tests, builds, and deploys to `https://stockmarketview.pages.dev`.
+One-time setup in the Cloudflare dashboard:
 
-Until the secrets are set, the workflow still tests and builds on every push and skips the deploy step.
+1. **Workers & Pages → Create → Pages → Connect to Git**, and pick this repository.
+2. Build settings: framework preset **None**, build command `npm run build`, output directory `dist`.
+3. Save and deploy. The site goes live at `https://<project-name>.pages.dev`.
+
+The `functions/` folder is deployed with the site automatically, and `.node-version` pins Node 22 for the build.
+Pull requests get their own preview URL. GitHub Actions (`.github/workflows/ci.yml`) runs the tests on every push.
 
 ## Keeping data accurate
 
