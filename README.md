@@ -15,8 +15,8 @@ added when the build is complete.
 | 1 | Data proxy, ticker search (India + US), live chart with period/interval chips, market status, deploy pipeline | **Done** |
 | 2 | Indicators, candlestick patterns, plain-English summary, tooltips, key levels, fundamentals, compare, multi-timeframe, watchlists | **Done** |
 | 3 | Market pulse landing page, scheduled data job, "patterns today" feed, similar stocks | **Done** |
-| 4 | Drawing tools, PNG export, shareable URLs | Next |
-| 5 | Paper trading | |
+| 4 | Drawing tools, PNG export, shareable URLs | **Done** |
+| 5 | Paper trading | Next |
 | 6 | Gemini chatbot (bring your own key), text then voice | |
 | 7 | Visual polish, mobile and performance passes, v1-vs-v2 write-up | |
 
@@ -37,6 +37,12 @@ added when the build is complete.
 - **Patterns today**: every NIFTY 500 and S&P 500 stock scanned for candlestick patterns after each close,
   ranked by unusual volume, with RSI; one click opens the chart with the pattern marked.
 - **Similar stocks**: same-industry peers below the chart, with one-click compare.
+- **Drawing tools**: trendline, horizontal level, rectangle, Fibonacci retracement and text notes. Select, drag to
+  move, undo/redo (Cmd/Ctrl+Z), Delete to remove. Drawings are anchored to price and time, so they stay put when
+  you change period or interval, and are saved per stock in this browser.
+- **Image export**: download or copy the chart as a PNG with a caption (stock, timeframe, date) and no watermark.
+- **Shareable links**: the address bar always describes the chart on screen (stock, period, interval, indicators,
+  compare, layout), and Share copies it. Drawings are not part of links; share them as an image.
 - **Appearance**: dark and light themes, plus a colour-blind-friendly blue/orange palette for up/down.
 - **Command palette** (Cmd/Ctrl+K): search stocks, or type a command such as "light theme", "show RSI" or "go to markets".
 - **Remembers your setup**: last view, stock, timeframe, indicators, layout and appearance.

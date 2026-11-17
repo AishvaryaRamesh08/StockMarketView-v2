@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppearanceMenu } from './components/AppearanceMenu.tsx';
+import { ChartActions, TextNoteInput } from './components/ChartActions.tsx';
 import { ChartSummary } from './components/ChartSummary.tsx';
+import type { TextRequest } from './components/drawingController.ts';
 import { ChartToolbar } from './components/ChartToolbar.tsx';
 import { IndexStrip, STRIP_INDICES } from './components/IndexStrip.tsx';
 import { InfoTip } from './components/InfoTip.tsx';
@@ -15,12 +17,16 @@ import { SimilarStocks } from './components/SimilarStocks.tsx';
 import { WatchlistPanel } from './components/WatchlistPanel.tsx';
 import { MAX_COMPARE, useCompare } from './hooks/useCompare.ts';
 import { useDailyPatterns } from './hooks/useDailyPatterns.ts';
+import { useDrawings } from './hooks/useDrawings.ts';
 import { useLiveChart } from './hooks/useLiveChart.ts';
 import { useUniverse } from './hooks/useMarketData.ts';
 import { useProfile } from './hooks/useProfile.ts';
 import { useQuotes } from './hooks/useQuotes.ts';
 import { useWatchlists } from './hooks/useWatchlists.ts';
+import { chartPng, copyImage, downloadBlob } from './lib/chartImage.ts';
+import { newId, type DrawTool } from './lib/drawings.ts';
 import { digitsFor } from './lib/format.ts';
+import { decodeLink, encodeLink, type LinkState } from './lib/shareUrl.ts';
 import { previousSession, supportResistance, type Level } from './lib/levels.ts';
 import { marketOf, sessionKeyFn } from './lib/markets.ts';
 import { isMarketId } from './lib/marketData.ts';
@@ -29,7 +35,7 @@ import { setAppearance, useAppearance } from './lib/theme.ts';
 import type { PatternId } from './lib/patterns.ts';
 import { findPeers } from './lib/pulse.ts';
 import type { MarketId } from './lib/types.ts';
-import { intervalForPeriod, isIntervalId, isIntraday, isPeriodId, periodForInterval, type IntervalId, type PeriodId } from './lib/ranges.ts';
+import { INTERVALS, PERIODS, intervalForPeriod, isIntervalId, isIntraday, isPeriodId, periodForInterval, unsupportedReason, type IntervalId, type PeriodId } from './lib/ranges.ts';
 import { load, save } from './lib/storage.ts';
 
 type Layout = 'single' | 'multi';
@@ -90,10 +96,33 @@ function loadPrefs(): Prefs {
   return p;
 }
 
+/** A shared link overrides the saved session for what it specifies; everything else is kept. */
+function applyLink(p: Prefs, link: LinkState | null): Prefs {
+  if (!link) return p;
+  if (link.view === 'markets') return { ...p, view: 'markets', pulseMarket: link.market ?? p.pulseMarket };
+  const next: Prefs = { ...p, view: 'chart', symbol: link.symbol ?? p.symbol };
+  if (link.period) next.period = link.period;
+  if (link.interval) next.interval = link.interval;
+  // A link may pair a period and interval that can't be served together; fix rather than fail.
+  if (unsupportedReason(next.period, next.interval)) next.interval = intervalForPeriod(next.period, next.interval);
+  if (link.overlays) next.overlays = link.overlays;
+  if (link.compare) next.compare = link.compare;
+  if (link.layout) next.layout = link.layout;
+  return next;
+}
+
+function linkFor(p: Prefs): string {
+  return encodeLink(
+    p.view === 'markets'
+      ? { view: 'markets', market: p.pulseMarket }
+      : { view: 'chart', symbol: p.symbol, period: p.period, interval: p.interval, overlays: p.overlays, compare: p.compare, layout: p.layout },
+  );
+}
+
 const isNarrow = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches;
 
 export function App() {
-  const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
+  const [prefs, setPrefs] = useState<Prefs>(() => applyLink(loadPrefs(), decodeLink(window.location.search)));
   const [search, setSearch] = useState<SearchMode | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const { symbol, period, interval, layout } = prefs;
@@ -101,6 +130,31 @@ export function App() {
   const intraday = isIntraday(interval);
 
   useEffect(() => save(PREFS_KEY, prefs), [prefs]);
+  // The address bar always describes the current view, so it can be copied and shared as is.
+  useEffect(() => {
+    const qs = linkFor(prefs);
+    if (window.location.search !== `?${qs}`) window.history.replaceState(null, '', `${window.location.pathname}?${qs}`);
+  }, [prefs]);
+
+  const [toast, setToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2600);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  // Drawings for the open stock, the active tool, the selected drawing and a pending text note.
+  const draw = useDrawings(prefs.symbol);
+  const [tool, setTool] = useState<DrawTool | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [textReq, setTextReq] = useState<TextRequest | null>(null);
+  const [capture, setCapture] = useState<(() => HTMLCanvasElement) | null>(null);
+  useEffect(() => {
+    setTool(null);
+    setSelectedId(null);
+    setTextReq(null);
+  }, [prefs.symbol, prefs.layout, prefs.view]);
+  const onScreenshotReady = useCallback((fn: (() => HTMLCanvasElement) | null) => setCapture(() => fn), []);
 
   const wl = useWatchlists();
   const chart = useLiveChart(symbol, period, interval);
@@ -183,6 +237,34 @@ export function App() {
     } else selectSymbol(s);
   };
 
+  // Drawing shortcuts: Esc cancels/deselects, Delete removes, Cmd/Ctrl+Z undoes, Shift+Cmd/Ctrl+Z or Ctrl+Y redoes.
+  useEffect(() => {
+    if (prefs.view !== 'chart' || prefs.layout !== 'single') return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable) return;
+      if (document.querySelector('.palette-backdrop')) return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (e.key === 'Escape') {
+        if (tool) setTool(null);
+        else setSelectedId(null);
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+        e.preventDefault();
+        draw.remove(selectedId);
+        setSelectedId(null);
+      } else if (mod && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) draw.redo();
+        else draw.undo();
+      } else if (mod && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        draw.redo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [prefs.view, prefs.layout, tool, selectedId, draw]);
+
   // Cmd/Ctrl+K or "/" opens search from anywhere.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -232,6 +314,69 @@ export function App() {
       })),
     ],
     [appearance, prefs.layout, prefs.sidebar, prefs.overlays, symbol, watched, wl, update, toggleOverlay],
+  );
+
+  /* ------------------------------ image + share ------------------------------ */
+  const imageBlob = useCallback(async () => {
+    if (!capture) throw new Error('Chart not ready');
+    const name = quote?.name ?? symbol;
+    const ticker = symbol.replace(/\.(NS|BO)$/, '').replace(/^\^/, '');
+    const periodLabel = PERIODS.find((x) => x.id === period)?.label ?? period;
+    const intervalLabel = INTERVALS.find((x) => x.id === interval)?.label ?? interval;
+    const date = new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    const price = quote?.price != null ? ` · last ${quote.price.toFixed(2)} ${quote.currency}` : '';
+    return chartPng(capture(), { title: `${name} (${ticker})`, detail: `${quote?.exchange ?? ''} · ${periodLabel}, ${intervalLabel} candles · ${date}${price}` });
+  }, [capture, quote, symbol, period, interval]);
+
+  const fileName = () => `${symbol.replace(/[^A-Za-z0-9.-]/g, '')}-${period}-${interval}-${new Date().toISOString().slice(0, 10)}.png`;
+  const onDownload = async () => {
+    try {
+      downloadBlob(await imageBlob(), fileName());
+      setToast('Image downloaded');
+    } catch {
+      setToast("Couldn't create the image");
+    }
+  };
+  const onCopyImage = async () => {
+    try {
+      setToast((await copyImage(await imageBlob())) ? 'Image copied to clipboard' : "This browser doesn't allow copying images; use Download instead");
+    } catch {
+      setToast("Couldn't create the image");
+    }
+  };
+  const onShare = async () => {
+    const url = `${window.location.origin}${window.location.pathname}?${linkFor(prefs)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setToast('Link copied. Drawings stay on this device; share them as an image.');
+    } catch {
+      window.prompt('Copy this link:', url);
+    }
+  };
+
+  const saveNote = (text: string) => {
+    if (!textReq) return;
+    if (textReq.id) draw.commit(draw.drawings.map((d) => (d.id === textReq.id ? { ...d, text } : d)));
+    else {
+      const id = newId();
+      draw.commit([...draw.drawings, { id, tool: 'text', a: textReq.point, text }]);
+      setSelectedId(id);
+    }
+    setTextReq(null);
+    setTool(null);
+  };
+
+  const drawingProps = useMemo(
+    () => ({
+      drawings: draw.drawings,
+      tool,
+      selectedId,
+      onCommit: draw.commit,
+      onSelect: setSelectedId,
+      onToolDone: () => setTool(null),
+      onTextRequest: setTextReq,
+    }),
+    [draw.drawings, draw.commit, tool, selectedId],
   );
 
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -368,6 +513,33 @@ export function App() {
             </div>
           )}
 
+          {layout === 'single' && chart.status !== 'error' && (
+            <ChartActions
+              tool={tool}
+              onTool={(t) => {
+                setTool(t);
+                setSelectedId(null);
+              }}
+              hasSelection={!!selectedId}
+              drawingCount={draw.drawings.length}
+              canUndo={draw.canUndo}
+              canRedo={draw.canRedo}
+              onUndo={draw.undo}
+              onRedo={draw.redo}
+              onDelete={() => {
+                if (selectedId) draw.remove(selectedId);
+                setSelectedId(null);
+              }}
+              onClear={() => {
+                draw.clear();
+                setSelectedId(null);
+              }}
+              onDownload={onDownload}
+              onCopyImage={onCopyImage}
+              onShare={onShare}
+            />
+          )}
+
           {layout === 'multi' ? (
             <MultiTimeframe symbol={symbol} frames={prefs.frames} overlays={overlays} onFramesChange={(frames) => update({ frames })} />
           ) : (
@@ -413,7 +585,10 @@ export function App() {
                     levels={levels}
                     compare={compareLines}
                     lastBarLive={chart.marketOpen}
+                    drawing={drawingProps}
+                    onScreenshotReady={onScreenshotReady}
                   />
+                  {textReq && <TextNoteInput key={`${textReq.x},${textReq.y}`} x={textReq.x} y={textReq.y} initial={textReq.initial} onSave={saveNote} onCancel={() => setTextReq(null)} />}
                 </>
               )}
             </section>
@@ -433,6 +608,12 @@ export function App() {
         </main>
         )}
       </div>
+
+      {toast && (
+        <div className="toast" role="status">
+          {toast}
+        </div>
+      )}
 
       <footer className="footer">
         Prices refresh every 30 seconds and may be delayed by the exchange. Nothing on this site is investment advice. Data: Yahoo Finance (unofficial). Chart times are exchange time.

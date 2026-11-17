@@ -25,6 +25,8 @@ import {
 } from 'lightweight-charts';
 import { diffTail } from '../lib/candles.ts';
 import { CloudPrimitive, type CloudPoint } from './cloudPrimitive.ts';
+import { DrawingController, type TextRequest } from './drawingController.ts';
+import type { DrawTool, Drawing } from '../lib/drawings.ts';
 import { sessionKeyFn, tzOffsetMs } from '../lib/markets.ts';
 import { formatPrice, formatVolume } from '../lib/format.ts';
 import { PATTERN_BIAS, detectPatterns, type Bias, type PatternId } from '../lib/patterns.ts';
@@ -60,6 +62,20 @@ interface Props {
   syncGroup?: string;
   /** Smaller legend for side-by-side panes. */
   compact?: boolean;
+  /** Drawing layer; omit to show no drawings (multi-timeframe panes). */
+  drawing?: DrawingProps;
+  /** Receives a function that captures the chart as a canvas, for image export. */
+  onScreenshotReady?: (capture: (() => HTMLCanvasElement) | null) => void;
+}
+
+export interface DrawingProps {
+  drawings: Drawing[];
+  tool: DrawTool | null;
+  selectedId: string | null;
+  onCommit: (next: Drawing[]) => void;
+  onSelect: (id: string | null) => void;
+  onToolDone: () => void;
+  onTextRequest: (req: TextRequest) => void;
 }
 
 
@@ -141,6 +157,8 @@ function PriceChartImpl({
   lastBarLive = false,
   syncGroup,
   compact = false,
+  drawing,
+  onScreenshotReady,
 }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const legend = useRef<HTMLDivElement>(null);
@@ -158,6 +176,11 @@ function PriceChartImpl({
   const compareRef = useRef<CompareLine[]>([]);
   const patternsAt = useRef(new Map<number, PatternId[]>());
   const cloudRef = useRef<CloudPrimitive | null>(null);
+  const controllerRef = useRef<DrawingController | null>(null);
+  const timesRef = useRef<number[]>([]);
+  const drawingRef = useRef(drawing);
+  drawingRef.current = drawing;
+  const drawingEnabled = !!drawing;
   const applyingSync = useRef(false);
   const fmt = useRef({ currency, digits, compact });
   fmt.current = { currency, digits, compact };
@@ -338,6 +361,8 @@ function PriceChartImpl({
     }
     byTime.current = new Map(candles.map((c, i) => [shift(c.t) as number, i]));
     drawn.current = { version, candles };
+    timesRef.current = candles.map((c) => c.t);
+    controllerRef.current?.refresh();
     // Refit for a new series, or when a refresh replaced it with a different span (new trading day).
     const rolledOver = prev.version === version && prev.candles.length > 0 && candles.length > 0 && prev.candles[0].t !== candles[0].t;
     if ((fittedVersion.current !== version || rolledOver) && candles.length > 0) {
@@ -522,6 +547,48 @@ function PriceChartImpl({
     candle.priceScale().applyOptions({ mode: compare.length ? PriceScaleMode.Percentage : PriceScaleMode.Normal });
     renderLegend(undefined);
   }, [compare]);
+
+  /* ------------------------------- drawings ------------------------------- */
+  useEffect(() => {
+    const chart = chartRef.current;
+    const series = candleRef.current;
+    if (!drawingEnabled || !chart || !series || !host.current) return;
+    const ctl = new DrawingController({
+      chart,
+      series,
+      host: host.current,
+      times: () => timesRef.current,
+      barX: (i) => {
+        const c = drawn.current.candles[i];
+        return c ? chart.timeScale().timeToCoordinate(shiftRef.current(c.t)) : null;
+      },
+      colors: () => ({ line: cssVar('--accent'), fill: cssVar('--accent-soft'), text: cssVar('--text-1'), labelBg: cssVar('--surface-1'), handle: cssVar('--border-strong') }),
+      formatPrice: (p) => formatPrice(p, fmt.current.currency, fmt.current.digits, false),
+      onCommit: (next) => drawingRef.current?.onCommit(next),
+      onSelect: (id) => drawingRef.current?.onSelect(id),
+      onToolDone: () => drawingRef.current?.onToolDone(),
+      onTextRequest: (req) => drawingRef.current?.onTextRequest(req),
+    });
+    controllerRef.current = ctl;
+    return () => {
+      ctl.destroy();
+      controllerRef.current = null;
+    };
+  }, [drawingEnabled]);
+
+  useEffect(() => {
+    if (drawing) controllerRef.current?.setState({ drawings: drawing.drawings, tool: drawing.tool, selectedId: drawing.selectedId });
+  }, [drawing?.drawings, drawing?.tool, drawing?.selectedId]);
+
+  /* --------------------------- image export hook --------------------------- */
+  useEffect(() => {
+    if (!onScreenshotReady) return;
+    onScreenshotReady(() => {
+      chartRef.current!.clearCrosshairPosition();
+      return chartRef.current!.takeScreenshot(true, false);
+    });
+    return () => onScreenshotReady(null);
+  }, [onScreenshotReady]);
 
   return (
     <div className={`chart ${compact ? 'compact' : ''}`}>

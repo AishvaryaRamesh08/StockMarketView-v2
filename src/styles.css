@@ -2470,3 +2470,142 @@ button.pf-row:hover {
   font-family: var(--font-sans);
   color: var(--accent);
 }
+
+/* ================================================================ Phase 4 */
+.chart-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: -6px;
+}
+
+.draw-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.draw-tools svg {
+  width: 17px;
+  height: 17px;
+}
+
+.icon-btn.pressed {
+  background: var(--accent);
+  color: #fff;
+}
+
+.icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  background: none;
+}
+
+.icon-btn.text-btn {
+  font-weight: 600;
+  padding: 0 8px;
+}
+
+.draw-tools .divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--border);
+}
+
+.tool-hint {
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.share-tools {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.export-menu {
+  left: auto;
+  right: 0;
+  width: 170px;
+  padding: 4px;
+}
+
+.export-menu button {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-1);
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.export-menu button:hover {
+  background: var(--surface-2);
+}
+
+.chart-canvas.drawing-tool,
+.chart-canvas.drawing-tool * {
+  cursor: crosshair !important;
+}
+
+.text-note-input {
+  position: absolute;
+  z-index: 6;
+  margin-top: 8px;
+  transform: translateY(-50%);
+}
+
+.text-note-input input {
+  width: 220px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  border: 2px solid var(--accent);
+  background: var(--surface-1);
+  color: var(--text-1);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  box-shadow: var(--shadow);
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  z-index: 80;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 32px);
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: var(--tooltip-bg);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow);
+  color: var(--text-1);
+  font-size: 13px;
+  animation: rise 0.15s ease-out;
+}
+
+@media (max-width: 860px) {
+  .chart-actions {
+    gap: 8px;
+  }
+
+  .share-tools {
+    margin-left: 0;
+  }
+
+  .tool-hint {
+    flex-basis: 100%;
+    order: 3;
+  }
+}
