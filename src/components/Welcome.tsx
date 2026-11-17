@@ -70,6 +70,15 @@ export function Welcome({ onClose, onGo, searchKey }: Props) {
           ))}
         </div>
 
+        <div className="welcome-ai">
+          <svg viewBox="0 0 20 20" aria-hidden>
+            <path d="M10 2.5l1.6 4.4 4.4 1.6-4.4 1.6L10 14.5l-1.6-4.4L4 8.5l4.4-1.6zM15.5 13l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />
+          </svg>
+          <span>
+            <b>Ask AI</b> (top right): type or say “show Reliance for a year with RSI” or “what is a demat account?” and it draws the chart or explains. Uses your own free Gemini key, kept in your browser.
+          </span>
+        </div>
+
         <ul className="welcome-features">
           {FEATURES.map(([k, v]) => (
             <li key={k}>

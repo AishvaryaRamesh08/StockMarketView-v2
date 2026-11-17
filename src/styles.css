@@ -882,8 +882,8 @@ kbd {
   background: var(--surface-1);
   min-height: 0;
   position: sticky;
-  top: 57px;
-  height: calc(100vh - 57px);
+  top: var(--topbar-h, 57px);
+  height: calc(100vh - var(--topbar-h, 57px));
   overflow: hidden;
 }
 
@@ -2643,8 +2643,8 @@ button.pf-row:hover {
   border-left: 1px solid var(--border);
   background: var(--surface-1);
   position: sticky;
-  top: 57px;
-  height: calc(100vh - 57px);
+  top: var(--topbar-h, 57px);
+  height: calc(100vh - var(--topbar-h, 57px));
   overflow-y: auto;
 }
 
@@ -3012,7 +3012,7 @@ button.pt-row:hover {
     overflow: hidden;
   }
 
-  .trade-dock .trade-panel {
+  .trade-dock .side-panel {
     width: min(360px, 100%);
     height: 100%;
     overflow-y: auto;
@@ -3049,7 +3049,7 @@ button.pt-row:hover {
     align-items: flex-end;
   }
 
-  .trade-dock .trade-panel {
+  .trade-dock .side-panel {
     width: 100%;
     height: auto;
     max-height: 88vh;
@@ -3739,5 +3739,445 @@ button.pt-row:hover {
 
   .actions-row .share-tools {
     margin-left: auto;
+  }
+}
+
+/* ================================================================ Phase 6: side panel tabs + chat */
+.side-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--surface-1);
+}
+
+.side-panel > .trade-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.trade-dock {
+  overflow: hidden;
+}
+
+.side-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 12px 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.side-tabs [role='tab'] {
+  padding: 8px 12px 9px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  color: var(--text-2);
+  font-weight: 600;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.side-tabs [role='tab'].active {
+  color: var(--text-1);
+  border-bottom-color: var(--accent);
+}
+
+.side-tabs .side-close {
+  margin-left: auto;
+}
+
+/* ------------------------------------------------------------- Ask AI button (top bar) */
+.ask-ai-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(138, 99, 255, 0.45);
+  background: linear-gradient(135deg, rgba(91, 140, 255, 0.16), rgba(138, 99, 255, 0.2));
+  color: var(--text-1);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ask-ai-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: #a78bfa;
+}
+
+.ask-ai-btn:hover {
+  border-color: #8a63ff;
+}
+
+.ask-ai-btn.pressed {
+  background: linear-gradient(135deg, var(--accent), #8a63ff);
+  border-color: transparent;
+  color: #fff;
+}
+
+.ask-ai-btn.pressed svg {
+  fill: #fff;
+}
+
+@media (max-width: 1200px) {
+  .ask-ai-btn {
+    padding: 0 8px;
+  }
+
+  .ask-ai-btn .btn-label {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------- chat */
+.chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.chat-empty p {
+  margin: 4px 0 12px;
+  color: var(--text-2);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.chat-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chat-suggestion {
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chat-suggestion:hover {
+  border-color: var(--accent);
+}
+
+.chat-msg {
+  max-width: 92%;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.chat-msg.user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+  white-space: pre-wrap;
+}
+
+.chat-msg.assistant {
+  align-self: flex-start;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+
+.chat-msg.assistant p {
+  margin: 0 0 6px;
+}
+
+.chat-msg.assistant p:last-child,
+.chat-msg.assistant ul:last-child,
+.chat-msg.assistant ol:last-child {
+  margin-bottom: 0;
+}
+
+.chat-msg.assistant ul,
+.chat-msg.assistant ol {
+  margin: 0 0 6px;
+  padding-left: 18px;
+}
+
+.chat-msg.error {
+  align-self: stretch;
+  background: var(--down-soft);
+  color: var(--down);
+  font-size: 13px;
+}
+
+.chat-note {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.chat-note svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: var(--up);
+  stroke-width: 1.8;
+}
+
+.chat-msg.typing {
+  display: inline-flex;
+  gap: 4px;
+  padding: 12px 14px;
+}
+
+.chat-msg.typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+  animation: typing 1s infinite ease-in-out;
+}
+
+.chat-msg.typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.chat-msg.typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes typing {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+.chat-hint {
+  margin: 0 16px 6px;
+  font-size: 12px;
+  color: var(--warn);
+}
+
+.chat-input {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin: 0 12px;
+  padding: 6px 6px 6px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.chat-input:focus-within {
+  border-color: var(--accent);
+}
+
+.chat-input textarea {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  border: none;
+  background: none;
+  color: var(--text-1);
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.45;
+  padding: 6px 0;
+  max-height: 120px;
+  field-sizing: content;
+  outline: none;
+}
+
+.chat-input .icon-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.send-btn:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+}
+
+.mic-btn.listening {
+  background: var(--down);
+  color: #fff;
+  animation: attention 1.2s ease-out infinite;
+}
+
+.chat-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px 12px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.chat-foot-actions {
+  display: flex;
+  gap: 12px;
+  flex: none;
+}
+
+.chat-foot .link {
+  font-size: 12px;
+}
+
+.chat-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.chat-setup h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.chat-setup p,
+.chat-setup ol {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.chat-setup ol {
+  padding-left: 18px;
+}
+
+.chat-setup a {
+  color: var(--accent);
+}
+
+.chat-setup input {
+  width: 100%;
+}
+
+.chat-privacy {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 12.5px !important;
+}
+
+.chat-privacy svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  fill: none;
+  stroke: var(--up);
+  stroke-width: 1.5;
+}
+
+.chat-setup-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.danger-link {
+  color: var(--down);
+  margin-left: auto;
+}
+
+@media (max-width: 860px) {
+  .trade-dock .side-panel:has(.chat) {
+    height: 85vh;
+  }
+}
+
+.welcome-ai {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(138, 99, 255, 0.35);
+  background: linear-gradient(135deg, rgba(91, 140, 255, 0.1), rgba(138, 99, 255, 0.12));
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.welcome-ai b {
+  color: var(--text-1);
+}
+
+.welcome-ai svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  fill: #a78bfa;
+  margin-top: 1px;
+}
+
+/* The Ask AI button needs the room: market countdowns live in the pills' tooltips below this width. */
+@media (max-width: 1480px) {
+  .topbar .status-next {
+    display: none;
+  }
+}
+
+/* Narrow laptops and tablets: the logo alone keeps the top bar inside the window. */
+@media (max-width: 1100px) {
+  .brand span {
+    display: none;
+  }
+}
+
+/* Markets index cards: two per row when the page is narrow, so sparklines fit their cards. */
+.index-card {
+  min-width: 0;
+  overflow: hidden;
+}
+
+@container workspace (max-width: 760px) {
+  .index-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

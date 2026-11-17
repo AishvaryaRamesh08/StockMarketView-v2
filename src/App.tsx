@@ -10,6 +10,9 @@ import { InfoTip } from './components/InfoTip.tsx';
 import { MarketPulse } from './components/MarketPulse.tsx';
 import { Portfolio } from './components/Portfolio.tsx';
 import { TradePanel } from './components/TradePanel.tsx';
+import { ChatPanel } from './components/ChatPanel.tsx';
+import { useChat } from './hooks/useChat.ts';
+import { useChatTools } from './hooks/useChatTools.ts';
 import type { TradeLine, TradeMark } from './components/PriceChart.tsx';
 import { MarketStatusPill } from './components/MarketStatusPills.tsx';
 import { DEFAULT_FRAMES, MultiTimeframe, type Frame } from './components/MultiTimeframe.tsx';
@@ -21,6 +24,7 @@ import { SimilarStocks } from './components/SimilarStocks.tsx';
 import { WatchlistPanel } from './components/WatchlistPanel.tsx';
 import { Welcome } from './components/Welcome.tsx';
 import { useFillHeight } from './hooks/useFillHeight.ts';
+import { useStickyPanels } from './hooks/useStickyPanels.ts';
 import { MAX_COMPARE, useCompare } from './hooks/useCompare.ts';
 import { useDailyPatterns } from './hooks/useDailyPatterns.ts';
 import { useDrawings } from './hooks/useDrawings.ts';
@@ -63,6 +67,8 @@ interface Prefs {
   portfolioMarket: MarketId;
   /** Trade panel beside the chart. */
   tradeOpen: boolean;
+  /** Which tab the side panel shows. */
+  sideTab: 'trade' | 'chat';
   /** "At a glance" summary expanded under the quote header. */
   glance: boolean;
 }
@@ -92,6 +98,7 @@ const DEFAULT_PREFS: Prefs = {
   pulseMarket: inIndia() ? 'IN' : 'US',
   portfolioMarket: inIndia() ? 'IN' : 'US',
   tradeOpen: false,
+  sideTab: 'trade',
   glance: false,
 };
 
@@ -111,6 +118,7 @@ function loadPrefs(): Prefs {
   if (isMarketId(raw.portfolioMarket)) p.portfolioMarket = raw.portfolioMarket;
   if (typeof raw.tradeOpen === 'boolean') p.tradeOpen = raw.tradeOpen;
   if (typeof raw.glance === 'boolean') p.glance = raw.glance;
+  if (raw.sideTab === 'trade' || raw.sideTab === 'chat') p.sideTab = raw.sideTab;
   if (isMarketId(raw.pulseMarket)) p.pulseMarket = raw.pulseMarket;
   return p;
 }
@@ -253,6 +261,19 @@ export function App() {
     return { ...c, ...newer, name: c.name, exchange: c.exchange || live.exchange, prevClose, change, changePct: change != null && prevClose ? (change / prevClose) * 100 : null };
   }, [chart.quote, live]);
 
+  const chatTools = useChatTools({
+    prefs,
+    name: quote?.name,
+    update: (patch) => update(patch),
+    selectSymbol: (sym) => {
+      rememberRecent(sym);
+      update((p) => ({ symbol: sym, compare: p.compare.filter((c) => c !== sym) }));
+    },
+    watchlist: { name: wl.active.name, symbols: wl.active.symbols, toggle: wl.toggle },
+    maxCompare: MAX_COMPARE,
+  });
+  const chat = useChat(chatTools.execute, chatTools.system);
+
   const timezone = quote?.timezone ?? (marketOf(symbol) === 'IN' ? 'Asia/Kolkata' : 'America/New_York');
 
   const levels = useMemo(() => {
@@ -371,7 +392,8 @@ export function App() {
       { id: 'view-portfolio', label: 'Go to Portfolio', keywords: 'paper trading holdings positions p&l account', run: () => update({ view: 'portfolio' }) },
       { id: 'help', label: 'What can this site do?', keywords: 'help about welcome guide tour features', run: () => setWelcome(true) },
       { id: 'focus', label: focus ? 'Exit full-screen chart' : 'Maximize chart', keywords: 'full screen fullscreen focus expand zoom', run: () => { update({ view: 'chart' }); setFocus((f) => !f); } },
-      { id: 'trade', label: prefs.tradeOpen ? 'Close trade panel' : `Paper trade ${symbol}`, keywords: 'buy sell order ticket paper', run: () => update((p) => ({ view: 'chart', tradeOpen: !p.tradeOpen })) },
+      { id: 'trade', label: prefs.tradeOpen && prefs.sideTab === 'trade' ? 'Close trade panel' : `Paper trade ${symbol}`, keywords: 'buy sell order ticket paper', run: () => update((p) => ({ view: 'chart', tradeOpen: !(p.tradeOpen && p.sideTab === 'trade'), sideTab: 'trade' })) },
+      { id: 'chat', label: 'Ask AI (chat with your charts)', keywords: 'chat gemini ai assistant bot voice question help', run: () => update({ tradeOpen: true, sideTab: 'chat' }) },
       { id: 'market-in', label: 'Markets: show India', keywords: 'nifty nse', run: () => update({ view: 'markets', pulseMarket: 'IN' }) },
       { id: 'market-us', label: 'Markets: show US', keywords: 's&p nasdaq nyse', run: () => update({ view: 'markets', pulseMarket: 'US' }) },
       appearance.theme === 'dark'
@@ -397,7 +419,7 @@ export function App() {
         },
       })),
     ],
-    [appearance, prefs.layout, prefs.sidebar, prefs.overlays, prefs.tradeOpen, focus, symbol, watched, wl, update, toggleOverlay],
+    [appearance, prefs.layout, prefs.sidebar, prefs.overlays, prefs.tradeOpen, prefs.sideTab, focus, symbol, watched, wl, update, toggleOverlay],
   );
 
   /* ------------------------------ image + share ------------------------------ */
@@ -463,9 +485,13 @@ export function App() {
     [draw.drawings, draw.commit, tool, selectedId],
   );
 
-  const tradeVisible = prefs.view === 'chart' && prefs.tradeOpen;
+  // The side panel: Trade needs a stock on screen; Chat works from any page.
+  const tradeVisible = prefs.tradeOpen && (prefs.view === 'chart' || prefs.sideTab === 'chat');
+  const sideTab = prefs.view === 'chart' ? prefs.sideTab : 'chat';
+  const openSide = (tab: 'trade' | 'chat') => update((p) => ({ tradeOpen: !(p.tradeOpen && p.sideTab === tab), sideTab: tab }));
   const focusMode = focus && prefs.view === 'chart';
   const glanceParts = useMemo(() => (chart.status === 'ready' ? summarize(chart.candles, interval, quote?.high52) : []), [chart.status, chart.candles, interval, quote?.high52]);
+  useStickyPanels();
   useFillHeight(chartPanel, 320, focusMode ? 12 : 16, [prefs.view, layout, chart.status === 'error', focusMode]);
 
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -528,6 +554,17 @@ export function App() {
         </button>
 
         <div className="topbar-status">
+          <button
+            className={`ask-ai-btn ${prefs.tradeOpen && sideTab === 'chat' ? 'pressed' : ''} ${attention ? 'attention' : ''}`}
+            onClick={() => (prefs.view !== 'chart' && prefs.tradeOpen && prefs.sideTab === 'chat' ? update({ tradeOpen: false }) : openSide('chat'))}
+            aria-pressed={prefs.tradeOpen && sideTab === 'chat'}
+            title="Ask AI: draw charts and explain them from plain English or voice (uses your own Gemini key)"
+          >
+            <svg viewBox="0 0 20 20" aria-hidden>
+              <path d="M10 2.5l1.6 4.4 4.4 1.6-4.4 1.6L10 14.5l-1.6-4.4L4 8.5l4.4-1.6zM15.5 13l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />
+            </svg>
+            <span className="btn-label">Ask AI</span>
+          </button>
           <button className="icon-btn help-btn" onClick={() => setWelcome(true)} aria-label="What can this site do?" title="What can this site do?">
             ?
           </button>
@@ -578,15 +615,15 @@ export function App() {
           <div className="actions-row">
             <div className="tools">
               <button
-                className={`tool-btn trade-btn ${prefs.tradeOpen ? 'pressed' : ''} ${attention ? 'attention' : ''}`}
-                onClick={() => update((p) => ({ tradeOpen: !p.tradeOpen }))}
-                aria-pressed={prefs.tradeOpen}
+                className={`tool-btn trade-btn ${prefs.tradeOpen && prefs.sideTab === 'trade' ? 'pressed' : ''} ${attention ? 'attention' : ''}`}
+                onClick={() => openSide('trade')}
+                aria-pressed={prefs.tradeOpen && prefs.sideTab === 'trade'}
                 title="Practise buying and selling this stock with virtual money"
               >
                 <svg viewBox="0 0 20 20" aria-hidden>
                   <path d="M4 14l4-4 3 3 5-6M13 7h3v3" />
                 </svg>
-                {prefs.tradeOpen ? (
+                {prefs.tradeOpen && prefs.sideTab === 'trade' ? (
                   'Close trade'
                 ) : (
                   <>
@@ -756,15 +793,35 @@ export function App() {
 
         {tradeVisible && (
           <div className="trade-dock" onMouseDown={(e) => e.target === e.currentTarget && update({ tradeOpen: false })}>
-            <TradePanel
-              symbol={symbol}
-              market={marketOf(symbol)}
-              quote={quote}
-              paper={paper}
-              onToast={setToast}
-              onOpenPortfolio={() => update({ view: 'portfolio', portfolioMarket: marketOf(symbol) })}
-              onClose={() => update({ tradeOpen: false })}
-            />
+            <div className="side-panel">
+              <div className="side-tabs" role="tablist" aria-label="Side panel">
+                {prefs.view === 'chart' && (
+                  <button role="tab" aria-selected={sideTab === 'trade'} className={sideTab === 'trade' ? 'active' : ''} onClick={() => update({ sideTab: 'trade' })}>
+                    Trade
+                  </button>
+                )}
+                <button role="tab" aria-selected={sideTab === 'chat'} className={sideTab === 'chat' ? 'active' : ''} onClick={() => update({ sideTab: 'chat' })}>
+                  Ask AI
+                </button>
+                <button className="icon-btn side-close" onClick={() => update({ tradeOpen: false })} aria-label="Close panel" title="Close">
+                  <svg viewBox="0 0 16 16" aria-hidden>
+                    <path d="M4 4l8 8M12 4l-8 8" />
+                  </svg>
+                </button>
+              </div>
+              {sideTab === 'trade' ? (
+                <TradePanel
+                  symbol={symbol}
+                  market={marketOf(symbol)}
+                  quote={quote}
+                  paper={paper}
+                  onToast={setToast}
+                  onOpenPortfolio={() => update({ view: 'portfolio', portfolioMarket: marketOf(symbol) })}
+                />
+              ) : (
+                <ChatPanel chat={chat} />
+              )}
+            </div>
           </div>
         )}
       </div>

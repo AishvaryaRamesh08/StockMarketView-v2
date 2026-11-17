@@ -17,8 +17,8 @@ added when the build is complete.
 | 3 | Market pulse landing page, scheduled data job, "patterns today" feed, similar stocks | **Done** |
 | 4 | Drawing tools, PNG export, shareable URLs | **Done** |
 | 5 | Paper trading | **Done** |
-| 6 | Gemini chatbot (bring your own key), text then voice | Next |
-| 7 | Visual polish, mobile and performance passes, v1-vs-v2 write-up | |
+| 6 | Gemini chatbot (bring your own key), text then voice | **Done** |
+| 7 | Visual polish, mobile and performance passes, v1-vs-v2 write-up | Next |
 
 ## Features so far
 
@@ -48,6 +48,16 @@ added when the build is complete.
   the open. Fills, working orders and average cost are drawn on the chart. A Portfolio page shows account value,
   cash, holdings, realised and unrealised P&L, an equity curve and full order history, with JSON export/import and
   reset. Orders are only checked while the site is open in a tab; fills ignore slippage, fees, dividends and splits.
+- **Ask AI** (Gemini, bring your own key): type or say “show Reliance for a year with RSI”, “compare TCS with
+  Infosys” or “what is a demat account?”. It drives the site through function calling (open charts, add or remove
+  indicators, compare, multi-timeframe, quotes, chart summaries, Markets page, watchlist) and answers beginner
+  questions carried over from the v1 Rasa bot. It never gives buy/sell recommendations and cannot place trades.
+  The key is stored only in the visitor's browser and sent only to Google (in a request header, never a URL); it
+  never reaches this site's Worker. The model is a setting (default `gemini-3.8-flash`); if it is overloaded or out of
+  quota the chat falls back to another Gemini model and says so. Voice input uses the
+  browser's built-in speech recognition and is hidden where the browser lacks it.
+- **Welcome guide**: a short first-visit introduction to the three pages and main features, reopened from **?**.
+- **Maximize** (F): only the top bar, chart controls and chart.
 - **Appearance**: dark and light themes, plus a colour-blind-friendly blue/orange palette for up/down.
 - **Command palette** (Cmd/Ctrl+K): search stocks, or type a command such as "light theme", "show RSI" or "go to markets".
 - **Remembers your setup**: last view, stock, timeframe, indicators, layout and appearance.
