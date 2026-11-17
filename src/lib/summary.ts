@@ -26,7 +26,7 @@ const UNIT: Partial<Record<IntervalId, [string, string]>> = {
 
 function barsAgo(n: number, interval: IntervalId): string {
   const unit = UNIT[interval];
-  if (n === 0) return unit ? `this ${unit[0]}` : 'on the latest candle';
+  if (n === 0) return unit ? (unit[0] === 'day' ? 'in the latest session' : `this ${unit[0]}`) : 'on the latest candle';
   if (!unit) return `${n} candle${n === 1 ? '' : 's'} ago`;
   return `${n} ${n === 1 ? unit[0] : unit[1]} ago`;
 }

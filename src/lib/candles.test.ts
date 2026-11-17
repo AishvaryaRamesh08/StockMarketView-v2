@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { diffTail, mergeCandles } from './candles.ts';
+import { diffTail, mergeCandles, sessionFromIntraday } from './candles.ts';
 import { dailyPrevClose, foldLiveTick } from '../../server/api.ts';
 import type { Candle } from './types.ts';
 
@@ -74,5 +74,22 @@ describe('foldLiveTick', () => {
     const daily = [bar(0), bar(100)];
     foldLiveTick(daily, '1d');
     expect(daily).toHaveLength(2);
+  });
+});
+
+describe('sessionFromIntraday', () => {
+  it('rebuilds a daily candle from intraday bars', () => {
+    const bars = [
+      { t: 100, o: 10, h: 12, l: 9, c: 11, v: 5 },
+      { t: 400, o: 11, h: 15, l: 10, c: 14, v: 7 },
+      { t: 700, o: 14, h: 14, l: 8, c: 9, v: 3 },
+    ];
+    expect(sessionFromIntraday(50, bars, 9.5)).toEqual({ t: 50, o: 10, h: 15, l: 8, c: 9.5, v: 15 });
+  });
+  it('widens high/low to include the last price', () => {
+    expect(sessionFromIntraday(0, [{ t: 0, o: 10, h: 11, l: 9, c: 10, v: 1 }], 12)).toMatchObject({ h: 12, l: 9, c: 12 });
+  });
+  it('returns null without intraday data', () => {
+    expect(sessionFromIntraday(0, [])).toBeNull();
   });
 });

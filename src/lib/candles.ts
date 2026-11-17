@@ -33,3 +33,22 @@ export function diffTail(prev: Candle[], next: Candle[]): { kind: 'reset' } | { 
   if (i < 0 || next[i].t !== lastPrevT || i !== prev.length - 1) return { kind: 'reset' };
   return { kind: 'update', bars: next.slice(i) };
 }
+
+/**
+ * One daily candle built from a session's intraday bars: first open, highest high, lowest low,
+ * last price, total volume. Used when the provider sends today's daily candle empty (Yahoo does
+ * this for NSE/BSE stocks) but has the intraday bars.
+ */
+export function sessionFromIntraday(t: number, intraday: Candle[], lastPrice?: number | null): Candle | null {
+  if (intraday.length === 0) return null;
+  const c = lastPrice ?? intraday[intraday.length - 1].c;
+  let h = c;
+  let l = c;
+  let v = 0;
+  for (const b of intraday) {
+    if (b.h > h) h = b.h;
+    if (b.l < l) l = b.l;
+    v += b.v;
+  }
+  return { t, o: intraday[0].o, h, l, c, v };
+}

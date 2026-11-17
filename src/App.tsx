@@ -3,27 +3,35 @@ import { ChartSummary } from './components/ChartSummary.tsx';
 import { ChartToolbar } from './components/ChartToolbar.tsx';
 import { IndexStrip, STRIP_INDICES } from './components/IndexStrip.tsx';
 import { InfoTip } from './components/InfoTip.tsx';
+import { MarketPulse } from './components/MarketPulse.tsx';
 import { MarketStatusPill } from './components/MarketStatusPills.tsx';
 import { DEFAULT_FRAMES, MultiTimeframe, type Frame } from './components/MultiTimeframe.tsx';
 import { ActiveOverlays, OverlayMenu } from './components/OverlayMenu.tsx';
 import { PriceChart } from './components/PriceChart.tsx';
 import { QuoteHeader } from './components/QuoteHeader.tsx';
 import { SearchPalette, rememberRecent, type SearchMode } from './components/SearchPalette.tsx';
+import { SimilarStocks } from './components/SimilarStocks.tsx';
 import { WatchlistPanel } from './components/WatchlistPanel.tsx';
 import { MAX_COMPARE, useCompare } from './hooks/useCompare.ts';
 import { useDailyPatterns } from './hooks/useDailyPatterns.ts';
 import { useLiveChart } from './hooks/useLiveChart.ts';
+import { useUniverse } from './hooks/useMarketData.ts';
 import { useProfile } from './hooks/useProfile.ts';
 import { useQuotes } from './hooks/useQuotes.ts';
 import { useWatchlists } from './hooks/useWatchlists.ts';
 import { digitsFor } from './lib/format.ts';
 import { previousSession, supportResistance, type Level } from './lib/levels.ts';
 import { marketOf, sessionKeyFn } from './lib/markets.ts';
+import { isMarketId } from './lib/marketData.ts';
 import { DEFAULT_OVERLAYS, isOverlayId, type OverlayId } from './lib/overlays.ts';
+import type { PatternId } from './lib/patterns.ts';
+import { findPeers } from './lib/pulse.ts';
+import type { MarketId } from './lib/types.ts';
 import { intervalForPeriod, isIntervalId, isIntraday, isPeriodId, periodForInterval, type IntervalId, type PeriodId } from './lib/ranges.ts';
 import { load, save } from './lib/storage.ts';
 
 type Layout = 'single' | 'multi';
+type View = 'markets' | 'chart';
 
 interface Prefs {
   symbol: string;
@@ -34,13 +42,19 @@ interface Prefs {
   layout: Layout;
   frames: Frame[];
   sidebar: boolean;
+  view: View;
+  pulseMarket: MarketId;
 }
 
 const PREFS_KEY = 'smv.chart';
 
-function defaultSymbol(): string {
+function inIndia(): boolean {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  return tz === 'Asia/Kolkata' || tz === 'Asia/Calcutta' ? 'RELIANCE.NS' : 'AAPL';
+  return tz === 'Asia/Kolkata' || tz === 'Asia/Calcutta';
+}
+
+function defaultSymbol(): string {
+  return inIndia() ? 'RELIANCE.NS' : 'AAPL';
 }
 
 const DEFAULT_PREFS: Prefs = {
@@ -52,6 +66,9 @@ const DEFAULT_PREFS: Prefs = {
   layout: 'single',
   frames: DEFAULT_FRAMES,
   sidebar: true,
+  // First-time visitors land on the market overview, not an arbitrary stock.
+  view: 'markets',
+  pulseMarket: inIndia() ? 'IN' : 'US',
 };
 
 /** Accepts prefs saved by older versions (Phase 1 saved only symbol/period/interval). */
@@ -66,6 +83,8 @@ function loadPrefs(): Prefs {
   if (raw.layout === 'single' || raw.layout === 'multi') p.layout = raw.layout;
   if (Array.isArray(raw.frames) && raw.frames.length === 3 && raw.frames.every((f) => isPeriodId(f?.period) && isIntervalId(f?.interval))) p.frames = raw.frames as Frame[];
   if (typeof raw.sidebar === 'boolean') p.sidebar = raw.sidebar;
+  if (raw.view === 'markets' || raw.view === 'chart') p.view = raw.view;
+  if (isMarketId(raw.pulseMarket)) p.pulseMarket = raw.pulseMarket;
   return p;
 }
 
@@ -87,7 +106,16 @@ export function App() {
   const { lines: compareLines, failed: compareFailed } = useCompare(prefs.compare, period, interval);
 
   // One batched quotes call (in chunks of 20) covers the index strip, the open stock and the watchlist.
-  const quoteSymbols = useMemo(() => [...STRIP_INDICES.map((i) => i.symbol), symbol, ...wl.active.symbols], [symbol, wl.active.symbols]);
+  // Peers: same industry within the NIFTY 500 / S&P 500, or Yahoo's related symbols for anything else.
+  const universe = useUniverse(marketOf(symbol));
+  const { peers, peerBasis } = useMemo(() => {
+    const fromIndex = universe ? findPeers(symbol, universe).map((e) => e.s) : [];
+    if (fromIndex.length) return { peers: fromIndex, peerBasis: 'industry' as const };
+    const related = (profile?.related ?? []).filter((s) => s !== symbol && marketOf(s) === marketOf(symbol)).slice(0, 6);
+    return { peers: related, peerBasis: 'related' as const };
+  }, [universe, profile?.related, symbol]);
+
+  const quoteSymbols = useMemo(() => [...STRIP_INDICES.map((i) => i.symbol), symbol, ...wl.active.symbols, ...peers], [symbol, wl.active.symbols, peers]);
   const { quotes } = useQuotes(quoteSymbols);
   const badges = useDailyPatterns(wl.active.symbols);
 
@@ -122,7 +150,7 @@ export function App() {
   const selectSymbol = useCallback(
     (s: string) => {
       rememberRecent(s);
-      update((p) => ({ symbol: s, compare: p.compare.filter((c) => c !== s) }));
+      update((p) => ({ symbol: s, view: 'chart', compare: p.compare.filter((c) => c !== s) }));
       setSheetOpen(false);
     },
     [update],
@@ -130,6 +158,21 @@ export function App() {
   const setPeriod = useCallback((p: PeriodId) => update((x) => ({ period: p, interval: intervalForPeriod(p, x.interval) })), [update]);
   const setInterval = useCallback((i: IntervalId) => update((x) => ({ interval: i, period: periodForInterval(i, x.period) })), [update]);
   const toggleOverlay = useCallback((id: OverlayId) => update((p) => ({ overlays: p.overlays.includes(id) ? p.overlays.filter((o) => o !== id) : [...p.overlays, id] })), [update]);
+
+  // From the pulse page; a pattern from the feed opens the daily chart with that pattern marked.
+  const openFromPulse = useCallback(
+    (s: string, pattern?: PatternId) => {
+      selectSymbol(s);
+      if (pattern) {
+        update((p) => ({
+          overlays: p.overlays.includes(pattern) ? p.overlays : [...p.overlays, pattern],
+          ...(p.interval === '1d' ? {} : { period: '3mo' as PeriodId, interval: '1d' as IntervalId }),
+          layout: 'single',
+        }));
+      }
+    },
+    [selectSymbol, update],
+  );
 
   const onSearchSelect = (s: string) => {
     if (search === 'compare') update((p) => ({ compare: s === p.symbol || p.compare.includes(s) ? p.compare : [...p.compare, s].slice(0, MAX_COMPARE) }));
@@ -184,6 +227,15 @@ export function App() {
           <span>StockMarketView</span>
         </a>
 
+        <nav className="view-tabs" aria-label="Views">
+          <button className={prefs.view === 'markets' ? 'active' : ''} aria-current={prefs.view === 'markets' ? 'page' : undefined} onClick={() => update({ view: 'markets' })}>
+            Markets
+          </button>
+          <button className={prefs.view === 'chart' ? 'active' : ''} aria-current={prefs.view === 'chart' ? 'page' : undefined} onClick={() => update({ view: 'chart' })}>
+            Chart<span className="view-sym"> · {symbol.replace(/\.(NS|BO)$/, '').replace(/^\^/, '')}</span>
+          </button>
+        </nav>
+
         <button className="search-trigger" onClick={() => setSearch('chart')}>
           <svg viewBox="0 0 24 24" aria-hidden>
             <circle cx="11" cy="11" r="7" />
@@ -204,6 +256,11 @@ export function App() {
       <div className={`body ${prefs.sidebar ? 'with-sidebar' : ''}`}>
         {prefs.sidebar && <div className="sidebar-desktop">{panel()}</div>}
 
+        {prefs.view === 'markets' ? (
+          <main className="workspace">
+            <MarketPulse market={prefs.pulseMarket} onMarket={(m) => update({ pulseMarket: m })} onOpen={openFromPulse} />
+          </main>
+        ) : (
         <main className="workspace">
           <QuoteHeader
             symbol={symbol}
@@ -324,7 +381,20 @@ export function App() {
               )}
             </section>
           )}
+
+          {layout === 'single' && (
+            <SimilarStocks
+              peers={peers}
+              basis={peerBasis}
+              quotes={quotes}
+              comparing={prefs.compare}
+              canCompare={prefs.compare.length < MAX_COMPARE}
+              onOpen={selectSymbol}
+              onCompare={(s) => update((p) => ({ compare: p.compare.includes(s) ? p.compare.filter((c) => c !== s) : [...p.compare, s].slice(0, MAX_COMPARE) }))}
+            />
+          )}
         </main>
+        )}
       </div>
 
       <footer className="footer">

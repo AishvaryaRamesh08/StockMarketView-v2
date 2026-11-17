@@ -14,8 +14,8 @@ added when the build is complete.
 |---|---|---|
 | 1 | Data proxy, ticker search (India + US), live chart with period/interval chips, market status, deploy pipeline | **Done** |
 | 2 | Indicators, candlestick patterns, plain-English summary, tooltips, key levels, fundamentals, compare, multi-timeframe, watchlists | **Done** |
-| 3 | Market pulse landing page, scheduled data job, "patterns today" feed, similar stocks | Next |
-| 4 | Drawing tools, PNG export, shareable URLs | |
+| 3 | Market pulse landing page, scheduled data job, "patterns today" feed, similar stocks | **Done** |
+| 4 | Drawing tools, PNG export, shareable URLs | Next |
 | 5 | Paper trading | |
 | 6 | Gemini chatbot (bring your own key), text then voice | |
 | 7 | Visual polish, mobile and performance passes, v1-vs-v2 write-up | |
@@ -32,7 +32,12 @@ added when the build is complete.
 - **Compare** up to 4 stocks or indices as % change.
 - **Multi-timeframe**: three charts of the same stock with synced crosshairs.
 - **Watchlists**: multiple named lists with live prices, sparklines and pattern badges.
-- **Remembers your setup**: last stock, timeframe, indicators and layout.
+- **Markets page** (the landing page): India/US toggle, index cards, market breadth, a NIFTY 500 / S&P 500 heatmap
+  sized by market cap, and top gainers, losers and most active (by value traded), refreshed every minute.
+- **Patterns today**: every NIFTY 500 and S&P 500 stock scanned for candlestick patterns after each close,
+  ranked by unusual volume, with RSI; one click opens the chart with the pattern marked.
+- **Similar stocks**: same-industry peers below the chart, with one-click compare.
+- **Remembers your setup**: last view, stock, timeframe, indicators and layout.
 
 Upcoming earnings dates are not shown: Yahoo only serves them to logged-in sessions.
 
@@ -55,6 +60,10 @@ Yahoo Finance chart + spark endpoints
 - **Polls only when useful:** every 30s while the stock's market is open, every 5 minutes when closed, and not at all while the tab is hidden.
 - **Search index** (`public/symbols.json`, 18.8k symbols, about 240 KB gzipped) loads only when search is first opened.
 - **No accounts or database.** Preferences are kept in the visitor's browser.
+- **Market-wide data**: `/api/pulse` prices all ~500 stocks of a market in 25 batched calls, cached for 60 seconds.
+  Work that needs one request per stock runs in GitHub Actions instead (`.github/workflows/market-data.yml`):
+  the pattern scan after each close and the constituent list weekly. Results are published as assets of the
+  `data` release, which the API reads and caches.
 
 Prices are labelled "refreshed every 30s", never "real-time": Yahoo's feed is unofficial and some listings are exchange-delayed.
 
@@ -82,6 +91,9 @@ npm run build
 
 Refresh the ticker list (NSE official list + v1's BSE list + NASDAQ Trader directories) with `npm run symbols`.
 
+Build the market data locally with `npm run data:universe` then `npm run data:patterns` (files go to `data-out/`,
+which the dev server uses before falling back to the published release).
+
 ## Deploying (free)
 
 The site runs as one **Cloudflare Worker** on the free plan: static files in `dist/` are served by
@@ -104,6 +116,7 @@ To run the production Worker locally: `npm run build && npx wrangler dev`.
 
 - Update `src/data/holidays.ts` each year when NSE and NYSE publish their calendars. India's 2027 dates are marked provisional.
 - NSE's Diwali Muhurat session is not modelled yet.
+- Yahoo sends the current day's daily candle empty for NSE/BSE stocks; the API and the scan rebuild it from 5-minute bars.
 
 ## Disclaimer
 

@@ -1694,3 +1694,684 @@ kbd {
     transition: none !important;
   }
 }
+
+/* ================================================================ Phase 3 */
+
+/* ------------------------------------------------------------- view tabs */
+.view-tabs {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.view-tabs button {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-2);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.view-tabs button:hover {
+  color: var(--text-1);
+}
+
+.view-tabs button.active {
+  background: var(--surface-3);
+  color: var(--text-1);
+}
+
+.view-sym {
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+/* ------------------------------------------------------------- shared card */
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  min-width: 0;
+}
+
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.card-sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.segmented.text button {
+  width: auto;
+  padding: 0 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.banner-error {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--down-soft);
+  color: var(--down);
+  font-size: 13px;
+}
+
+.empty-note {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.help {
+  border-bottom: 1px dotted var(--text-3);
+  cursor: help;
+}
+
+/* ------------------------------------------------------------- pulse page */
+.pulse {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pulse-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 20px;
+}
+
+.pulse-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pulse-title h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.breadth {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.breadth-bar {
+  display: flex;
+  width: 140px;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--surface-3);
+}
+
+.breadth-bar .up-part {
+  background: var(--up);
+}
+
+.breadth-bar .down-part {
+  background: var(--down);
+  margin-left: auto;
+}
+
+.updated {
+  color: var(--text-3);
+}
+
+.index-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.index-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'name chg'
+    'price spark';
+  align-items: center;
+  gap: 4px 8px;
+  padding: 12px 14px;
+  text-align: left;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.index-card:hover {
+  border-color: var(--border-strong);
+}
+
+.ic-name {
+  grid-area: name;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ic-price {
+  grid-area: price;
+  font-size: 20px;
+  font-weight: 650;
+}
+
+.ic-chg {
+  grid-area: chg;
+  font-weight: 600;
+  font-size: 13px;
+  text-align: right;
+}
+
+.index-card .sparkline {
+  grid-area: spark;
+}
+
+.pulse-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 12px;
+}
+
+/* ------------------------------------------------------------- heatmap */
+.heatmap-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.heatmap {
+  position: relative;
+  flex: 1;
+  min-height: 460px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.hm-sector {
+  position: absolute;
+  box-shadow: inset 0 0 0 1px var(--bg);
+  pointer-events: none;
+}
+
+.hm-sector-label {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 2px 5px 0;
+  height: 18px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.hm-sector-label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hm-sector-label b {
+  font-weight: 600;
+}
+
+.hm-tile {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 0;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  overflow: hidden;
+  transition: filter 0.1s;
+}
+
+.hm-tile:hover {
+  filter: brightness(1.25);
+  z-index: 1;
+  outline: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.hm-sym {
+  font-weight: 700;
+  line-height: 1.1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 2px;
+}
+
+.hm-chg {
+  font-size: 11px;
+  opacity: 0.9;
+  font-variant-numeric: tabular-nums;
+}
+
+.hm-hover {
+  position: absolute;
+  z-index: 5;
+  width: 210px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: #283041;
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  font-size: 12.5px;
+}
+
+.hm-hover-name {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.hm-hover-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.hm-hover-sec {
+  color: var(--text-3);
+  font-size: 11.5px;
+  margin-top: 3px;
+}
+
+.hm-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.hm-scale {
+  width: 90px;
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgb(214, 64, 69), rgb(52, 58, 72), rgb(22, 160, 112));
+}
+
+.hm-skeleton {
+  position: absolute;
+  inset: 0;
+}
+
+/* ------------------------------------------------------------- movers */
+.movers {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+
+.tabs button {
+  flex: 1;
+  padding: 11px 6px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-2);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tabs button.active {
+  color: var(--text-1);
+  border-bottom-color: var(--accent);
+}
+
+.tab-note {
+  padding: 8px 14px 0;
+}
+
+.mover-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+}
+
+.mover-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 72px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mover-row:hover {
+  background: var(--surface-2);
+}
+
+.mover-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mover-name b {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.mover-name span {
+  font-size: 11.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mover-price {
+  font-size: 13px;
+}
+
+.chg-pill {
+  justify-self: end;
+  padding: 3px 7px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.chg-pill.up {
+  background: var(--up-soft);
+}
+
+.chg-pill.down {
+  background: var(--down-soft);
+}
+
+/* ------------------------------------------------------------- patterns feed */
+.pf-filters {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pf-filters select {
+  height: 34px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  font: inherit;
+  font-size: 12.5px;
+  padding: 0 8px;
+}
+
+.pf-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.pf-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.3fr) 90px 72px 72px 48px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+button.pf-row:hover {
+  background: var(--surface-2);
+}
+
+.pf-headrow {
+  cursor: default;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+
+.pf-stock {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pf-stock b {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.pf-stock span {
+  font-size: 11.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.num-col {
+  text-align: right;
+  justify-self: end;
+}
+
+.num.strong {
+  color: var(--warn);
+  font-weight: 650;
+}
+
+.show-more {
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+/* ------------------------------------------------------------- similar stocks */
+.similar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.similar-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.similar-head h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.similar-row {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+
+.peer-card {
+  flex: 0 0 172px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.peer-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px 8px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.peer-main:hover {
+  background: var(--surface-2);
+}
+
+.peer-sym {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.peer-name {
+  font-size: 11.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 15px;
+}
+
+.peer-quote {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.peer-compare {
+  border: none;
+  border-top: 1px solid var(--border);
+  background: none;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px;
+  cursor: pointer;
+}
+
+.peer-compare:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.peer-compare.on {
+  color: var(--up);
+}
+
+.peer-compare:disabled {
+  color: var(--text-3);
+  cursor: not-allowed;
+}
+
+@media (max-width: 1180px) {
+  .pulse-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 860px) {
+  .index-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .index-card {
+    grid-template-areas:
+      'name chg'
+      'price price'
+      'spark spark';
+    min-width: 0;
+  }
+
+  .index-card .sparkline {
+    width: 100%;
+    height: 28px;
+  }
+
+  .ic-price {
+    font-size: 17px;
+  }
+
+  .heatmap {
+    min-height: 380px;
+  }
+
+  .view-tabs {
+    order: 2;
+  }
+
+  .view-sym {
+    display: none;
+  }
+
+  .pf-row {
+    grid-template-columns: minmax(0, 1fr) auto 64px;
+  }
+
+  .pf-row > :nth-child(3),
+  .pf-row > :nth-child(6) {
+    display: none;
+  }
+
+  .pf-row > :nth-child(2) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .pf-headrow {
+    display: none;
+  }
+
+  .breadth-bar {
+    width: 90px;
+  }
+}

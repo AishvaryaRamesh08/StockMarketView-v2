@@ -10,9 +10,9 @@ export function Sparkline({ values, prevClose, width = 64, height = 22 }: { valu
   const d = values.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
   const up = values[values.length - 1] >= (prevClose ?? values[0]);
   return (
-    <svg className={`sparkline ${up ? 'up' : 'down'}`} width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden>
-      {prevClose != null && <line x1="0" x2={width} y1={y(prevClose)} y2={y(prevClose)} className="spark-base" />}
-      <path d={d} />
+    <svg className={`sparkline ${up ? 'up' : 'down'}`} width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden>
+      {prevClose != null && <line x1="0" x2={width} y1={y(prevClose)} y2={y(prevClose)} className="spark-base" vectorEffect="non-scaling-stroke" />}
+      <path d={d} vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }

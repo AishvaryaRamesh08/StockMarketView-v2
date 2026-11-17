@@ -1,0 +1,78 @@
+name: Market data
+
+# Builds the market-wide data the site can't compute live and publishes it as assets of the
+# "data" release (not a branch, so Cloudflare doesn't try to build it):
+#   universe.json      NIFTY 500 + S&P 500 constituents, sectors, market caps   (weekly)
+#   patterns-IN.json   candlestick patterns on the latest NSE session          (after the India close)
+#   patterns-US.json   candlestick patterns on the latest NYSE session         (after the US close)
+
+on:
+  schedule:
+    - cron: '45 10 * * 1-5' # 16:15 IST, 45 minutes after the NSE close
+    - cron: '45 21 * * 1-5' # 16:45 EST / 17:45 EDT, after the NYSE close
+    - cron: '30 2 * * 0' # Sunday: refresh constituents and market caps
+  workflow_dispatch:
+    inputs:
+      task:
+        description: What to rebuild
+        type: choice
+        options: [all, universe, patterns-IN, patterns-US]
+        default: all
+
+permissions:
+  contents: write # to create the release and upload its assets
+
+concurrency:
+  group: market-data
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      - name: Decide what to build
+        id: plan
+        run: |
+          case "${{ github.event.schedule }}" in
+            '45 10 * * 1-5') task=patterns-IN ;;
+            '45 21 * * 1-5') task=patterns-US ;;
+            '30 2 * * 0')    task=universe ;;
+            *)               task="${{ github.event.inputs.task || 'all' }}" ;;
+          esac
+          echo "task=$task" >> "$GITHUB_OUTPUT"
+          echo "Building: $task"
+
+      - name: Create the data release if it doesn't exist
+        run: |
+          gh release view data >/dev/null 2>&1 || gh release create data --prerelease \
+            --title "Live market data" \
+            --notes "Updated automatically by the Market data workflow. The site reads these files; there is nothing to download here."
+
+      - name: Build universe
+        if: steps.plan.outputs.task == 'universe' || steps.plan.outputs.task == 'all'
+        run: node scripts/build-universe.ts
+
+      - name: Fetch the current universe
+        if: steps.plan.outputs.task == 'patterns-IN' || steps.plan.outputs.task == 'patterns-US'
+        run: gh release download data --pattern universe.json --dir data-out --clobber
+
+      - name: Scan India
+        if: steps.plan.outputs.task == 'patterns-IN' || steps.plan.outputs.task == 'all'
+        run: node scripts/build-patterns.ts IN
+
+      - name: Scan US
+        if: steps.plan.outputs.task == 'patterns-US' || steps.plan.outputs.task == 'all'
+        run: node scripts/build-patterns.ts US
+
+      - name: Publish
+        run: |
+          ls -la data-out
+          gh release upload data data-out/*.json --clobber

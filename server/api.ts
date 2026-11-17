@@ -9,6 +9,8 @@
  * swapped without touching the frontend.
  */
 import type { ChartResponse, Candle, CorporateEvent, Quote, QuotesResponse, ApiError, Profile } from '../src/lib/types.ts';
+import { sessionFromIntraday } from '../src/lib/candles.ts';
+import { DATA_BASE_URL, PULSE_INDICES, isMarketId, type PatternFeed, type Pulse, type PulseStock, type Universe } from '../src/lib/marketData.ts';
 
 const RANGES = ['1d', '5d', '1mo', '3mo', '6mo', 'ytd', '1y', '5y', '10y', 'max'] as const;
 const INTERVALS = ['1m', '2m', '5m', '15m', '30m', '60m', '1d', '1wk', '1mo'] as const;
@@ -164,6 +166,19 @@ export function foldLiveTick(candles: Candle[], interval: string): void {
   candles.pop();
 }
 
+/** OHLCV bars from a Yahoo chart result, skipping the null-padded gaps it inserts. */
+function parseCandles(result: YahooChartResult): Candle[] {
+  const ts = result.timestamp ?? [];
+  const q = result.indicators.quote[0] ?? { open: [], high: [], low: [], close: [], volume: [] };
+  const candles: Candle[] = [];
+  for (let i = 0; i < ts.length; i++) {
+    const o = q.open[i], h = q.high[i], l = q.low[i], c = q.close[i];
+    if (o == null || h == null || l == null || c == null) continue;
+    candles.push({ t: ts[i], o, h, l, c, v: q.volume[i] ?? 0 });
+  }
+  return candles;
+}
+
 async function chart(params: URLSearchParams): Promise<Response> {
   const symbol = params.get('symbol') ?? '';
   const range = params.get('range') ?? '6mo';
@@ -179,16 +194,23 @@ async function chart(params: URLSearchParams): Promise<Response> {
   const result = data.chart?.result?.[0];
   if (!result) return fail(404, data.chart?.error?.description ?? 'No data for this symbol');
 
-  const ts = result.timestamp ?? [];
-  const q = result.indicators.quote[0] ?? { open: [], high: [], low: [], close: [], volume: [] };
-  const candles: Candle[] = [];
-  for (let i = 0; i < ts.length; i++) {
-    const o = q.open[i], h = q.high[i], l = q.low[i], c = q.close[i];
-    // Yahoo pads gaps with nulls; a candle without OHLC cannot be drawn.
-    if (o == null || h == null || l == null || c == null) continue;
-    candles.push({ t: ts[i], o, h, l, c, v: q.volume[i] ?? 0 });
-  }
+  const candles = parseCandles(result);
   foldLiveTick(candles, interval);
+
+  // Yahoo sends today's daily candle empty for NSE/BSE stocks. Rebuild it from today's
+  // 5-minute bars so daily charts (and patterns) include the latest session.
+  const ts = result.timestamp ?? [];
+  const lastT = ts[ts.length - 1];
+  if (interval === '1d' && range !== '1d' && lastT != null && result.meta.regularMarketPrice != null && (candles.length === 0 || candles[candles.length - 1].t < lastT)) {
+    try {
+      const intraday = (await upstream(`/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=5m&includePrePost=false`)) as { chart?: { result?: YahooChartResult[] | null } };
+      const r = intraday.chart?.result?.[0];
+      const bar = r ? sessionFromIntraday(lastT, parseCandles(r), result.meta.regularMarketPrice) : null;
+      if (bar) candles.push(bar);
+    } catch {
+      /* keep the chart without today's candle rather than failing */
+    }
+  }
 
   const events: CorporateEvent[] = [];
   for (const d of Object.values(result.events?.dividends ?? {})) events.push({ t: d.date, kind: 'dividend', value: String(d.amount) });
@@ -287,6 +309,120 @@ async function profile(params: URLSearchParams): Promise<Response> {
   return json(out, 200, 6 * 3600);
 }
 
+/* ------------------------- published market data -------------------------- */
+
+const memoryCache = new Map<string, { at: number; body: unknown }>();
+
+/**
+ * A JSON file published by the Market data workflow, cached at the edge (or in memory when
+ * running locally) for `ttl` seconds.
+ */
+async function dataFile<T>(name: string, ttl: number): Promise<T | null> {
+  // Local development: the Vite dev server can supply freshly built files from data-out/.
+  const local = (globalThis as { __smvLocalData?: (name: string) => Promise<unknown> }).__smvLocalData;
+  if (local) {
+    const body = await local(name);
+    if (body) return body as T;
+  }
+  const url = DATA_BASE_URL + name;
+  const cache = edgeCache();
+  const key = new Request(`https://data.cache/${name}`);
+  if (cache) {
+    const hit = await cache.match(key);
+    if (hit) return (await hit.json()) as T;
+  } else {
+    const hit = memoryCache.get(url);
+    if (hit && Date.now() - hit.at < ttl * 1000) return hit.body as T;
+  }
+  const res = await fetch(url, { headers: UPSTREAM_HEADERS, redirect: 'follow' });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new UpstreamError(res.status);
+  const body = (await res.json()) as T;
+  if (cache) await cache.put(key, new Response(JSON.stringify(body), { headers: { 'Cache-Control': `public, s-maxage=${ttl}` } }));
+  else memoryCache.set(url, { at: Date.now(), body });
+  return body;
+}
+
+async function universeRoute(params: URLSearchParams): Promise<Response> {
+  const market = params.get('market');
+  if (!isMarketId(market)) return fail(400, 'market must be IN or US');
+  const u = await dataFile<Universe>('universe.json', 6 * 3600);
+  if (!u) return fail(404, 'The stock universe has not been published yet');
+  return json({ generatedAt: u.generatedAt, stocks: u.markets[market] }, 200, 6 * 3600);
+}
+
+async function patternsRoute(params: URLSearchParams): Promise<Response> {
+  const market = params.get('market');
+  if (!isMarketId(market)) return fail(400, 'market must be IN or US');
+  const feed = await dataFile<PatternFeed>(`patterns-${market}.json`, 600);
+  if (!feed) return fail(404, 'No pattern scan has been published yet');
+  return json(feed, 200, 600);
+}
+
+/**
+ * Live snapshot of a whole market: every NIFTY 500 / S&P 500 stock's price, change and volume,
+ * plus the main indices. 25 batched calls of 20 symbols, cached for 60 seconds, so it costs
+ * Yahoo at most 26 requests a minute per market however many people are watching.
+ */
+async function pulseRoute(params: URLSearchParams): Promise<Response> {
+  const market = params.get('market');
+  if (!isMarketId(market)) return fail(400, 'market must be IN or US');
+  const u = await dataFile<Universe>('universe.json', 6 * 3600);
+  if (!u) return fail(404, 'The stock universe has not been published yet');
+  const universe = u.markets[market];
+  const bySymbol = new Map(universe.map((e) => [e.s, e]));
+
+  type Spark = { spark?: { result?: Array<{ symbol: string; response?: Array<{ meta: YahooMeta; indicators?: { quote?: Array<{ close?: (number | null)[] }> } }> }> } };
+  const batches: string[][] = [];
+  for (let i = 0; i < universe.length; i += MAX_QUOTES) batches.push(universe.slice(i, i + MAX_QUOTES).map((e) => e.s));
+  const encode = (syms: string[]) => syms.map(encodeURIComponent).join(',');
+
+  const [indexRes, ...stockRes] = await Promise.allSettled([
+    upstream(`/v7/finance/spark?symbols=${encode(PULSE_INDICES[market])}&range=1d&interval=5m`),
+    ...batches.map((b) => upstream(`/v7/finance/spark?symbols=${encode(b)}&range=1d&interval=1d`)),
+  ]);
+
+  const indices: Quote[] = [];
+  if (indexRes.status === 'fulfilled') {
+    for (const r of (indexRes.value as Spark).spark?.result ?? []) {
+      const resp = r.response?.[0];
+      if (!resp) continue;
+      const q = toQuote(resp.meta, resp.meta.previousClose ?? resp.meta.chartPreviousClose ?? null);
+      const closes = (resp.indicators?.quote?.[0]?.close ?? []).filter((c): c is number => c != null);
+      const step = Math.max(1, Math.ceil(closes.length / 60));
+      q.spark = closes.filter((_, i) => i % step === 0 || i === closes.length - 1).map((c) => +c.toFixed(2));
+      indices.push(q);
+    }
+    indices.sort((a, b) => PULSE_INDICES[market].indexOf(a.symbol) - PULSE_INDICES[market].indexOf(b.symbol));
+  }
+
+  const stocks: PulseStock[] = [];
+  let asOf = 0;
+  for (const res of stockRes) {
+    if (res.status !== 'fulfilled') continue;
+    for (const r of (res.value as Spark).spark?.result ?? []) {
+      const m = r.response?.[0]?.meta;
+      const e = bySymbol.get(r.symbol);
+      if (!m || !e || m.regularMarketPrice == null) continue;
+      const prev = m.previousClose ?? m.chartPreviousClose;
+      const v = m.regularMarketVolume ?? 0;
+      stocks.push({
+        s: e.s,
+        n: e.n,
+        sec: e.sec,
+        p: +m.regularMarketPrice.toFixed(2),
+        chg: prev ? +(((m.regularMarketPrice - prev) / prev) * 100).toFixed(2) : 0,
+        v,
+        t: Math.round(m.regularMarketPrice * v),
+        cap: e.cap,
+      });
+      if ((m.regularMarketTime ?? 0) > asOf) asOf = m.regularMarketTime!;
+    }
+  }
+  if (stocks.length === 0) return fail(502, 'The data provider did not respond. Retrying shortly.');
+  return json({ market, asOf, indices, stocks } satisfies Pulse, 200, 60);
+}
+
 /* --------------------------------- router ---------------------------------- */
 
 export async function handleApi(request: Request, waitUntil?: (p: Promise<unknown>) => void): Promise<Response> {
@@ -308,6 +444,9 @@ export async function handleApi(request: Request, waitUntil?: (p: Promise<unknow
     if (route === 'chart') res = await chart(url.searchParams);
     else if (route === 'quotes') res = await quotes(url.searchParams);
     else if (route === 'profile') res = await profile(url.searchParams);
+    else if (route === 'pulse') res = await pulseRoute(url.searchParams);
+    else if (route === 'patterns') res = await patternsRoute(url.searchParams);
+    else if (route === 'universe') res = await universeRoute(url.searchParams);
     else res = fail(404, 'Unknown endpoint');
   } catch (err) {
     const status = err instanceof UpstreamError ? err.status : 0;
