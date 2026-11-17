@@ -2609,3 +2609,21 @@ button.pf-row:hover {
     order: 3;
   }
 }
+
+/* Mid-width windows (tablets, narrow laptops): keep the search box usable by dropping the
+   market countdowns, which the status pills' tooltips still show. */
+.search-trigger {
+  min-width: 170px;
+}
+
+.search-trigger span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 1200px) {
+  .topbar .status-next {
+    display: none;
+  }
+}
