@@ -18,6 +18,10 @@ describe('share links', () => {
     expect(decodeLink('?v=markets&m=US')).toEqual({ view: 'markets', market: 'US' });
     expect(decodeLink('?v=markets&m=XX')).toEqual({ view: 'markets', market: undefined });
   });
+  it('encodes the portfolio page', () => {
+    expect(encodeLink({ view: 'portfolio', market: 'IN' })).toBe('v=portfolio&m=IN');
+    expect(decodeLink('?v=portfolio&m=IN')).toEqual({ view: 'portfolio', market: 'IN' });
+  });
   it('returns null for a plain visit so the visitor keeps their own session', () => {
     expect(decodeLink('')).toBeNull();
     expect(decodeLink('?utm_source=x')).toBeNull();

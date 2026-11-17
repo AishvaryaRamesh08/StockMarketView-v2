@@ -13,7 +13,7 @@ import { isIntervalId, isPeriodId, type IntervalId, type PeriodId } from './rang
 import type { MarketId } from './types.ts';
 
 export interface LinkState {
-  view: 'markets' | 'chart';
+  view: 'markets' | 'chart' | 'portfolio';
   market?: MarketId;
   symbol?: string;
   period?: PeriodId;
@@ -30,8 +30,8 @@ const MAX_COMPARE = 4;
 export function encodeLink(s: LinkState): string {
   const parts: string[] = [];
   const add = (k: string, v: string) => parts.push(`${k}=${encodeURIComponent(v).replace(/%2C/g, ',').replace(/%5E/g, '^')}`);
-  if (s.view === 'markets') {
-    add('v', 'markets');
+  if (s.view === 'markets' || s.view === 'portfolio') {
+    add('v', s.view);
     if (s.market) add('m', s.market);
     return parts.join('&');
   }
@@ -50,9 +50,10 @@ export function encodeLink(s: LinkState): string {
  */
 export function decodeLink(search: string): LinkState | null {
   const q = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
-  if (q.get('v') === 'markets') {
+  const v = q.get('v');
+  if (v === 'markets' || v === 'portfolio') {
     const m = q.get('m');
-    return { view: 'markets', market: m === 'IN' || m === 'US' ? m : undefined };
+    return { view: v, market: m === 'IN' || m === 'US' ? m : undefined };
   }
   const symbol = q.get('s') ?? '';
   if (!SYMBOL_RE.test(symbol)) return null;

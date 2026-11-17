@@ -2627,3 +2627,494 @@ button.pf-row:hover {
     display: none;
   }
 }
+
+/* ================================================================ Phase 5 */
+
+/* ------------------------------------------------------------- trade dock */
+.body.with-trade {
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.body.with-sidebar.with-trade {
+  grid-template-columns: 300px minmax(0, 1fr) 320px;
+}
+
+.trade-dock {
+  border-left: 1px solid var(--border);
+  background: var(--surface-1);
+  position: sticky;
+  top: 57px;
+  height: calc(100vh - 57px);
+  overflow-y: auto;
+}
+
+.trade-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px 20px;
+}
+
+.tp-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tp-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.tp-head .icon-btn {
+  margin-left: auto;
+}
+
+.tp-wallet,
+.tp-estimate {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.tp-wallet b,
+.tp-estimate b {
+  color: var(--text-1);
+  font-size: 14px;
+}
+
+.tp-position {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 11px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 13px;
+}
+
+.tp-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.tp-side {
+  padding: 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.tp-side.buy.active {
+  background: var(--up);
+  border-color: var(--up);
+  color: #fff;
+}
+
+.tp-side.sell.active {
+  background: var(--down);
+  border-color: var(--down);
+  color: #fff;
+}
+
+.tp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tp-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+
+.tp-types {
+  align-self: stretch;
+}
+
+.tp-types button {
+  flex: 1;
+}
+
+.tp-field input,
+.pf-budget input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-1);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.tp-field input:focus,
+.pf-budget input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.tp-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tp-input-row .link {
+  white-space: nowrap;
+  font-size: 12.5px;
+}
+
+.tp-note {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--text-1);
+  font-size: 12.5px;
+}
+
+.tp-error {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--down-soft);
+  color: var(--down);
+  font-size: 12.5px;
+}
+
+.tp-submit {
+  padding: 11px;
+  font-size: 14px;
+  color: #fff;
+  border: none;
+}
+
+.tp-submit.buy {
+  background: var(--up);
+}
+
+.tp-submit.sell {
+  background: var(--down);
+}
+
+.tp-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tp-orders h3 {
+  margin: 4px 0 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+
+.tp-order {
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.tp-disclaimer {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-3);
+}
+
+.trade-panel > .link {
+  align-self: flex-start;
+  font-size: 13px;
+}
+
+.trade-btn.pressed {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ------------------------------------------------------------- portfolio */
+.portfolio {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pf-cards {
+  display: grid;
+  grid-template-columns: 1.5fr repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pf-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  min-width: 0;
+}
+
+.pf-card b {
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.pf-card.main b {
+  font-size: 24px;
+}
+
+.pf-card > span:last-child:not(.pf-card-label) {
+  font-size: 12.5px;
+}
+
+.pf-card-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+
+.equity-chart {
+  height: 220px;
+}
+
+.pt-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.pt-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) 50px repeat(3, minmax(0, 1fr)) minmax(0, 1.4fr) 70px;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 6px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  text-align: left;
+  font-size: 13px;
+}
+
+button.pt-row {
+  cursor: pointer;
+}
+
+button.pt-row:hover {
+  background: var(--surface-2);
+}
+
+.pt-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+
+.pt-row.orders {
+  grid-template-columns: minmax(0, 1.2fr) 50px minmax(0, 2fr) auto;
+}
+
+.pt-row.history {
+  grid-template-columns: 120px 90px 70px 90px 100px minmax(0, 1fr);
+}
+
+.hist-status {
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hist-status.rejected {
+  color: var(--down);
+}
+
+.pf-budget,
+.pf-io {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+}
+
+.pf-budget label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-2);
+  width: 200px;
+}
+
+.pf-io {
+  margin-top: 10px;
+}
+
+.pf-confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-1);
+}
+
+.btn.danger-btn {
+  background: var(--down);
+  border-color: var(--down);
+  color: #fff;
+}
+
+/* ------------------------------------------------------------- responsive */
+@media (max-width: 1279px) {
+  .body.with-trade,
+  .body.with-sidebar.with-trade {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .body.with-sidebar.with-trade {
+    grid-template-columns: 300px minmax(0, 1fr);
+  }
+
+  /* Below desktop width the trade panel slides over the page. */
+  .trade-dock {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    height: auto;
+    border: none;
+    background: rgba(5, 7, 11, 0.45);
+    display: flex;
+    justify-content: flex-end;
+    overflow: hidden;
+  }
+
+  .trade-dock .trade-panel {
+    width: min(360px, 100%);
+    height: 100%;
+    overflow-y: auto;
+    background: var(--surface-1);
+    border-left: 1px solid var(--border-strong);
+    box-shadow: var(--shadow);
+    animation: slide-in 0.16s ease-out;
+  }
+
+  .pf-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pf-card.main {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1023px) {
+  .body.with-sidebar.with-trade {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(30px);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 860px) {
+  .trade-dock {
+    align-items: flex-end;
+  }
+
+  .trade-dock .trade-panel {
+    width: 100%;
+    height: auto;
+    max-height: 88vh;
+    border-left: none;
+    border-top: 1px solid var(--border-strong);
+    border-radius: 16px 16px 0 0;
+    animation: sheet-up 0.18s ease-out;
+  }
+
+  .pt-row {
+    grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
+  }
+
+  .pt-row > :nth-child(3),
+  .pt-row > :nth-child(4),
+  .pt-row > :nth-child(5),
+  .pt-row > :nth-child(7) {
+    display: none;
+  }
+
+  .pt-row.orders {
+    grid-template-columns: minmax(0, 1fr) 40px auto;
+  }
+
+  .pt-row.orders > :nth-child(3) {
+    display: block;
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .pt-row.orders > :nth-child(4) {
+    display: inline-block;
+  }
+
+  .pt-row.history {
+    grid-template-columns: minmax(0, 1fr) 60px 60px;
+  }
+
+  .pt-row.history > :nth-child(1),
+  .pt-row.history > :nth-child(4) {
+    display: none;
+  }
+
+  .pt-row.history > :nth-child(5),
+  .pt-row.history > :nth-child(6) {
+    display: block;
+  }
+}
+
+.crash {
+  max-width: 520px;
+  margin: 15vh auto 0;
+  padding: 0 16px;
+  text-align: center;
+}
+
+.crash pre {
+  margin-top: 20px;
+  font-size: 12px;
+  color: var(--text-3);
+  white-space: pre-wrap;
+}
+
+@media (max-width: 860px) {
+  .tools {
+    flex-wrap: wrap;
+  }
+}

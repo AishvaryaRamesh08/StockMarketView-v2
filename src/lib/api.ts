@@ -17,7 +17,12 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
     if ((err as Error).name === 'AbortError') throw err;
     throw new ApiFailure(0, 'You appear to be offline. Retrying shortly.');
   }
-  const body = (await res.json().catch(() => ({}))) as T & { error?: string };
+  // A cancelled request can fail while reading the body: that must stay a cancellation, not
+  // turn into an empty "successful" response.
+  const body = (await res.json().catch((err: Error) => {
+    if (err.name === 'AbortError') throw err;
+    return {};
+  })) as T & { error?: string };
   if (!res.ok) throw new ApiFailure(res.status, body.error ?? `Request failed (${res.status})`);
   return body;
 }

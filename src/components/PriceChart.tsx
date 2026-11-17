@@ -66,6 +66,22 @@ interface Props {
   drawing?: DrawingProps;
   /** Receives a function that captures the chart as a canvas, for image export. */
   onScreenshotReady?: (capture: (() => HTMLCanvasElement) | null) => void;
+  /** Paper-trading fills to mark, and working orders / average cost to draw as lines. */
+  trades?: TradeMark[];
+  tradeLines?: TradeLine[];
+}
+
+export interface TradeMark {
+  /** Unix seconds of the fill. */
+  t: number;
+  side: 'buy' | 'sell';
+  qty: number;
+}
+
+export interface TradeLine {
+  price: number;
+  title: string;
+  kind: 'buy' | 'sell' | 'avg';
 }
 
 export interface DrawingProps {
@@ -142,6 +158,8 @@ const EMPTY_SET: ReadonlySet<OverlayId> = new Set();
 const NO_EVENTS: CorporateEvent[] = [];
 const NO_LEVELS: Level[] = [];
 const NO_COMPARE: CompareLine[] = [];
+const NO_TRADES: TradeMark[] = [];
+const NO_TRADE_LINES: TradeLine[] = [];
 
 function PriceChartImpl({
   candles,
@@ -159,6 +177,8 @@ function PriceChartImpl({
   compact = false,
   drawing,
   onScreenshotReady,
+  trades = NO_TRADES,
+  tradeLines = NO_TRADE_LINES,
 }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const legend = useRef<HTMLDivElement>(null);
@@ -505,9 +525,42 @@ function PriceChartImpl({
         });
       }
     }
+    // Paper-trading fills, on the candle each one happened in.
+    if (candles.length) {
+      const accent = cssVar('--accent');
+      for (const tr of trades) {
+        const i = indexAtOrBefore(candles, tr.t);
+        if (i < 0 || tr.t < candles[0].t) continue;
+        out.push({
+          time: shift(candles[i].t),
+          position: tr.side === 'buy' ? 'belowBar' : 'aboveBar',
+          shape: tr.side === 'buy' ? 'arrowUp' : 'arrowDown',
+          color: accent,
+          text: `${tr.side === 'buy' ? 'B' : 'S'} ${tr.qty}`,
+        });
+      }
+    }
     out.sort((a, b) => (a.time as number) - (b.time as number));
     markers.setMarkers(out);
-  }, [candles, overlayKey, events, lastBarLive, shift]);
+  }, [candles, overlayKey, events, lastBarLive, shift, trades]);
+
+  /* ------------------------ paper-trading order lines ------------------------ */
+  const tradeLineRefs = useRef<IPriceLine[]>([]);
+  useEffect(() => {
+    const candle = candleRef.current;
+    if (!candle) return;
+    for (const l of tradeLineRefs.current) candle.removePriceLine(l);
+    tradeLineRefs.current = tradeLines.map((l) =>
+      candle.createPriceLine({
+        price: l.price,
+        color: l.kind === 'avg' ? cssVar('--text-2') : cssVar('--accent'),
+        lineStyle: l.kind === 'avg' ? LineStyle.Solid : LineStyle.Dashed,
+        lineWidth: 1,
+        axisLabelVisible: true,
+        title: l.title,
+      }),
+    );
+  }, [tradeLines]);
 
   /* ------------------------------- key levels ------------------------------- */
   useEffect(() => {

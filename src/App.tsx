@@ -7,6 +7,9 @@ import { ChartToolbar } from './components/ChartToolbar.tsx';
 import { IndexStrip, STRIP_INDICES } from './components/IndexStrip.tsx';
 import { InfoTip } from './components/InfoTip.tsx';
 import { MarketPulse } from './components/MarketPulse.tsx';
+import { Portfolio } from './components/Portfolio.tsx';
+import { TradePanel } from './components/TradePanel.tsx';
+import type { TradeLine, TradeMark } from './components/PriceChart.tsx';
 import { MarketStatusPill } from './components/MarketStatusPills.tsx';
 import { DEFAULT_FRAMES, MultiTimeframe, type Frame } from './components/MultiTimeframe.tsx';
 import { ActiveOverlays, OverlayMenu } from './components/OverlayMenu.tsx';
@@ -18,6 +21,8 @@ import { WatchlistPanel } from './components/WatchlistPanel.tsx';
 import { MAX_COMPARE, useCompare } from './hooks/useCompare.ts';
 import { useDailyPatterns } from './hooks/useDailyPatterns.ts';
 import { useDrawings } from './hooks/useDrawings.ts';
+import { usePaper } from './hooks/usePaper.ts';
+import { openOrders, positionOf, type Order } from './lib/paper.ts';
 import { useLiveChart } from './hooks/useLiveChart.ts';
 import { useUniverse } from './hooks/useMarketData.ts';
 import { useProfile } from './hooks/useProfile.ts';
@@ -39,7 +44,7 @@ import { INTERVALS, PERIODS, intervalForPeriod, isIntervalId, isIntraday, isPeri
 import { load, save } from './lib/storage.ts';
 
 type Layout = 'single' | 'multi';
-type View = 'markets' | 'chart';
+type View = 'markets' | 'chart' | 'portfolio';
 
 interface Prefs {
   symbol: string;
@@ -52,6 +57,9 @@ interface Prefs {
   sidebar: boolean;
   view: View;
   pulseMarket: MarketId;
+  portfolioMarket: MarketId;
+  /** Trade panel beside the chart. */
+  tradeOpen: boolean;
 }
 
 const PREFS_KEY = 'smv.chart';
@@ -77,6 +85,8 @@ const DEFAULT_PREFS: Prefs = {
   // First-time visitors land on the market overview, not an arbitrary stock.
   view: 'markets',
   pulseMarket: inIndia() ? 'IN' : 'US',
+  portfolioMarket: inIndia() ? 'IN' : 'US',
+  tradeOpen: false,
 };
 
 /** Accepts prefs saved by older versions (Phase 1 saved only symbol/period/interval). */
@@ -91,7 +101,9 @@ function loadPrefs(): Prefs {
   if (raw.layout === 'single' || raw.layout === 'multi') p.layout = raw.layout;
   if (Array.isArray(raw.frames) && raw.frames.length === 3 && raw.frames.every((f) => isPeriodId(f?.period) && isIntervalId(f?.interval))) p.frames = raw.frames as Frame[];
   if (typeof raw.sidebar === 'boolean') p.sidebar = raw.sidebar;
-  if (raw.view === 'markets' || raw.view === 'chart') p.view = raw.view;
+  if (raw.view === 'markets' || raw.view === 'chart' || raw.view === 'portfolio') p.view = raw.view;
+  if (isMarketId(raw.portfolioMarket)) p.portfolioMarket = raw.portfolioMarket;
+  if (typeof raw.tradeOpen === 'boolean') p.tradeOpen = raw.tradeOpen;
   if (isMarketId(raw.pulseMarket)) p.pulseMarket = raw.pulseMarket;
   return p;
 }
@@ -100,6 +112,7 @@ function loadPrefs(): Prefs {
 function applyLink(p: Prefs, link: LinkState | null): Prefs {
   if (!link) return p;
   if (link.view === 'markets') return { ...p, view: 'markets', pulseMarket: link.market ?? p.pulseMarket };
+  if (link.view === 'portfolio') return { ...p, view: 'portfolio', portfolioMarket: link.market ?? p.portfolioMarket };
   const next: Prefs = { ...p, view: 'chart', symbol: link.symbol ?? p.symbol };
   if (link.period) next.period = link.period;
   if (link.interval) next.interval = link.interval;
@@ -115,6 +128,8 @@ function linkFor(p: Prefs): string {
   return encodeLink(
     p.view === 'markets'
       ? { view: 'markets', market: p.pulseMarket }
+      : p.view === 'portfolio'
+        ? { view: 'portfolio', market: p.portfolioMarket }
       : { view: 'chart', symbol: p.symbol, period: p.period, interval: p.interval, overlays: p.overlays, compare: p.compare, layout: p.layout },
   );
 }
@@ -144,6 +159,14 @@ export function App() {
   }, [toast]);
 
   // Drawings for the open stock, the active tool, the selected drawing and a pending text note.
+  // Paper trading. Fills are announced in a toast.
+  const paper = usePaper((orders: Order[]) => {
+    const f = orders.filter((o) => o.status === 'filled');
+    const r = orders.filter((o) => o.status === 'rejected');
+    if (f.length) setToast(`${f.map((o) => `${o.side === 'buy' ? 'Bought' : 'Sold'} ${o.qty} ${o.symbol.replace(/\.(NS|BO)$/, '')} at ${o.fillPrice?.toFixed(2)}`).join(', ')} (simulated)`);
+    else if (r.length) setToast(`Order rejected: ${r[0].note ?? ''}`);
+  });
+
   const draw = useDrawings(prefs.symbol);
   const [tool, setTool] = useState<DrawTool | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -171,8 +194,28 @@ export function App() {
     return { peers: related, peerBasis: 'related' as const };
   }, [universe, profile?.related, symbol]);
 
-  const quoteSymbols = useMemo(() => [...STRIP_INDICES.map((i) => i.symbol), symbol, ...wl.active.symbols, ...peers], [symbol, wl.active.symbols, peers]);
+  // One batched quotes call (20 per request) covers the index strip, the open stock, the
+  // watchlist, similar stocks and every paper-trading holding or working order.
+  const quoteSymbols = useMemo(
+    () => [...STRIP_INDICES.map((i) => i.symbol), symbol, ...wl.active.symbols, ...peers, ...paper.watchSymbols],
+    [symbol, wl.active.symbols, peers, paper.watchSymbols],
+  );
   const { quotes } = useQuotes(quoteSymbols);
+  useEffect(() => paper.feed(quotes), [quotes, paper.feed]);
+
+  // This stock's fills, working orders and average cost, for the chart.
+  const trades: TradeMark[] = useMemo(
+    () => paper.state.orders.filter((o) => o.symbol === symbol && o.status === 'filled').map((o) => ({ t: Math.floor((o.filledAt ?? o.createdAt) / 1000), side: o.side, qty: o.qty })),
+    [paper.state.orders, symbol],
+  );
+  const tradeLines: TradeLine[] = useMemo(() => {
+    const lines: TradeLine[] = openOrders(paper.state, symbol)
+      .filter((o) => o.price != null)
+      .map((o) => ({ price: o.price!, kind: o.side, title: `${o.side === 'buy' ? 'Buy' : 'Sell'} ${o.type} ${o.qty}` }));
+    const pos = positionOf(paper.state, symbol);
+    if (pos) lines.push({ price: pos.avgCost, kind: 'avg', title: `Avg cost (${pos.qty})` });
+    return lines;
+  }, [paper.state, symbol]);
   const badges = useDailyPatterns(wl.active.symbols);
 
   // Prefer the batched quote for day change (always against yesterday's close).
@@ -288,6 +331,8 @@ export function App() {
     () => [
       { id: 'view-markets', label: 'Go to Markets', keywords: 'pulse heatmap movers home overview', run: () => update({ view: 'markets' }) },
       { id: 'view-chart', label: 'Go to Chart', keywords: 'candles', run: () => update({ view: 'chart' }) },
+      { id: 'view-portfolio', label: 'Go to Portfolio', keywords: 'paper trading holdings positions p&l account', run: () => update({ view: 'portfolio' }) },
+      { id: 'trade', label: prefs.tradeOpen ? 'Close trade panel' : `Paper trade ${symbol}`, keywords: 'buy sell order ticket paper', run: () => update((p) => ({ view: 'chart', tradeOpen: !p.tradeOpen })) },
       { id: 'market-in', label: 'Markets: show India', keywords: 'nifty nse', run: () => update({ view: 'markets', pulseMarket: 'IN' }) },
       { id: 'market-us', label: 'Markets: show US', keywords: 's&p nasdaq nyse', run: () => update({ view: 'markets', pulseMarket: 'US' }) },
       appearance.theme === 'dark'
@@ -313,7 +358,7 @@ export function App() {
         },
       })),
     ],
-    [appearance, prefs.layout, prefs.sidebar, prefs.overlays, symbol, watched, wl, update, toggleOverlay],
+    [appearance, prefs.layout, prefs.sidebar, prefs.overlays, prefs.tradeOpen, symbol, watched, wl, update, toggleOverlay],
   );
 
   /* ------------------------------ image + share ------------------------------ */
@@ -379,6 +424,8 @@ export function App() {
     [draw.drawings, draw.commit, tool, selectedId],
   );
 
+  const tradeVisible = prefs.view === 'chart' && prefs.tradeOpen;
+
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
   const panel = (onClose?: () => void) => (
@@ -415,6 +462,9 @@ export function App() {
           <button className={prefs.view === 'chart' ? 'active' : ''} aria-current={prefs.view === 'chart' ? 'page' : undefined} onClick={() => update({ view: 'chart' })}>
             Chart<span className="view-sym"> · {symbol.replace(/\.(NS|BO)$/, '').replace(/^\^/, '')}</span>
           </button>
+          <button className={prefs.view === 'portfolio' ? 'active' : ''} aria-current={prefs.view === 'portfolio' ? 'page' : undefined} onClick={() => update({ view: 'portfolio' })}>
+            Portfolio
+          </button>
         </nav>
 
         <button className="search-trigger" onClick={() => setSearch('chart')}>
@@ -435,12 +485,16 @@ export function App() {
 
       <IndexStrip quotes={quotes} active={symbol} onSelect={selectSymbol} />
 
-      <div className={`body ${prefs.sidebar ? 'with-sidebar' : ''}`}>
+      <div className={`body ${prefs.sidebar ? 'with-sidebar' : ''} ${tradeVisible ? 'with-trade' : ''}`}>
         {prefs.sidebar && <div className="sidebar-desktop">{panel()}</div>}
 
         {prefs.view === 'markets' ? (
           <main className="workspace">
             <MarketPulse market={prefs.pulseMarket} onMarket={(m) => update({ pulseMarket: m })} onOpen={openFromPulse} />
+          </main>
+        ) : prefs.view === 'portfolio' ? (
+          <main className="workspace">
+            <Portfolio market={prefs.portfolioMarket} onMarket={(m) => update({ portfolioMarket: m })} paper={paper} quotes={quotes} onOpen={selectSymbol} onToast={setToast} />
           </main>
         ) : (
         <main className="workspace">
@@ -461,6 +515,12 @@ export function App() {
           <div className="toolbar-row">
             {layout === 'single' ? <ChartToolbar period={period} interval={interval} onPeriod={setPeriod} onInterval={setInterval} /> : <div className="toolbar-hint">Each chart has its own period and interval. Move the crosshair on one to line up all three.</div>}
             <div className="tools">
+              <button className={`tool-btn trade-btn ${prefs.tradeOpen ? 'pressed' : ''}`} onClick={() => update((p) => ({ tradeOpen: !p.tradeOpen }))} aria-pressed={prefs.tradeOpen} title="Paper trade this stock with virtual money">
+                <svg viewBox="0 0 20 20" aria-hidden>
+                  <path d="M4 14l4-4 3 3 5-6M13 7h3v3" />
+                </svg>
+                Trade
+              </button>
               <OverlayMenu active={overlays} intraday={intraday} barCount={chart.candles.length} onToggle={toggleOverlay} onClear={() => update({ overlays: [] })} />
               {layout === 'single' && (
                 <button className="tool-btn" onClick={() => setSearch('compare')} disabled={prefs.compare.length >= MAX_COMPARE} title={prefs.compare.length >= MAX_COMPARE ? `Up to ${MAX_COMPARE} comparisons` : 'Overlay other stocks as % change'}>
@@ -587,6 +647,8 @@ export function App() {
                     lastBarLive={chart.marketOpen}
                     drawing={drawingProps}
                     onScreenshotReady={onScreenshotReady}
+                    trades={trades}
+                    tradeLines={tradeLines}
                   />
                   {textReq && <TextNoteInput key={`${textReq.x},${textReq.y}`} x={textReq.x} y={textReq.y} initial={textReq.initial} onSave={saveNote} onCancel={() => setTextReq(null)} />}
                 </>
@@ -606,6 +668,20 @@ export function App() {
             />
           )}
         </main>
+        )}
+
+        {tradeVisible && (
+          <div className="trade-dock" onMouseDown={(e) => e.target === e.currentTarget && update({ tradeOpen: false })}>
+            <TradePanel
+              symbol={symbol}
+              market={marketOf(symbol)}
+              quote={quote}
+              paper={paper}
+              onToast={setToast}
+              onOpenPortfolio={() => update({ view: 'portfolio', portfolioMarket: marketOf(symbol) })}
+              onClose={() => update({ tradeOpen: false })}
+            />
+          </div>
         )}
       </div>
 

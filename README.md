@@ -16,8 +16,8 @@ added when the build is complete.
 | 2 | Indicators, candlestick patterns, plain-English summary, tooltips, key levels, fundamentals, compare, multi-timeframe, watchlists | **Done** |
 | 3 | Market pulse landing page, scheduled data job, "patterns today" feed, similar stocks | **Done** |
 | 4 | Drawing tools, PNG export, shareable URLs | **Done** |
-| 5 | Paper trading | Next |
-| 6 | Gemini chatbot (bring your own key), text then voice | |
+| 5 | Paper trading | **Done** |
+| 6 | Gemini chatbot (bring your own key), text then voice | Next |
 | 7 | Visual polish, mobile and performance passes, v1-vs-v2 write-up | |
 
 ## Features so far
@@ -43,6 +43,11 @@ added when the build is complete.
 - **Image export**: download or copy the chart as a PNG with a caption (stock, timeframe, date) and no watermark.
 - **Shareable links**: the address bar always describes the chart on screen (stock, period, interval, indicators,
   compare, layout), and Share copies it. Drawings are not part of links; share them as an image.
+- **Paper trading**: virtual INR and USD wallets (₹10,00,000 and $100,000 by default), market, limit and stop
+  orders, long-only and whole shares. Market orders placed while a market is closed fill at the first price after
+  the open. Fills, working orders and average cost are drawn on the chart. A Portfolio page shows account value,
+  cash, holdings, realised and unrealised P&L, an equity curve and full order history, with JSON export/import and
+  reset. Orders are only checked while the site is open in a tab; fills ignore slippage, fees, dividends and splits.
 - **Appearance**: dark and light themes, plus a colour-blind-friendly blue/orange palette for up/down.
 - **Command palette** (Cmd/Ctrl+K): search stocks, or type a command such as "light theme", "show RSI" or "go to markets".
 - **Remembers your setup**: last view, stock, timeframe, indicators, layout and appearance.

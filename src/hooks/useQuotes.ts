@@ -26,7 +26,7 @@ export function useQuotes(symbols: string[]): { quotes: Record<string, Quote>; l
       const results = await Promise.allSettled(batches.map((b) => fetchQuotes(b, signal)));
       setQuotes((prev) => {
         const next = { ...prev };
-        for (const r of results) if (r.status === 'fulfilled') for (const q of r.value.quotes) next[q.symbol] = q;
+        for (const r of results) if (r.status === 'fulfilled') for (const q of r.value.quotes ?? []) next[q.symbol] = q;
         return next;
       });
       if (results.some((r) => r.status === 'fulfilled')) setLastUpdated(Date.now());
