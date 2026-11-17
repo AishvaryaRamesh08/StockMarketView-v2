@@ -21,6 +21,16 @@ export function mergeCandles(history: Candle[], fresh: Candle[]): Candle[] {
 }
 
 /**
+ * Applies a refresh. When the poll covers the whole period on screen (the 1D view), the fresh
+ * data replaces the history, so a new trading day pushes yesterday's session off the chart.
+ * Otherwise the fresh tail is merged into the longer history.
+ */
+export function applyRefresh(history: Candle[], fresh: Candle[], pollCoversPeriod: boolean): Candle[] {
+  if (pollCoversPeriod && fresh.length > 0) return fresh;
+  return mergeCandles(history, fresh);
+}
+
+/**
  * How the chart should apply a merge: `update` the trailing bars in place (cheap, no redraw
  * of history) when only the tail changed, otherwise `reset` with the whole series.
  */

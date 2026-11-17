@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiFailure, fetchChart } from '../lib/api.ts';
-import { mergeCandles } from '../lib/candles.ts';
+import { applyRefresh } from '../lib/candles.ts';
 import { marketOf, marketStatus } from '../lib/markets.ts';
 import { pollRange, type IntervalId, type PeriodId } from '../lib/ranges.ts';
 import type { Candle, CorporateEvent, Quote } from '../lib/types.ts';
@@ -74,7 +74,7 @@ export function useLiveChart(symbol: string, period: PeriodId, interval: Interva
             const prev = s.quote;
             return {
               ...s,
-              candles: mergeCandles(s.candles, res.candles),
+              candles: applyRefresh(s.candles, res.candles, pollRange(interval) === period),
               // The short poll range can't always tell yesterday's close; keep the one we had.
               quote: res.quote.prevClose == null && prev ? { ...res.quote, prevClose: prev.prevClose, change: prev.change, changePct: prev.changePct } : res.quote,
               error: null,
@@ -86,7 +86,7 @@ export function useLiveChart(symbol: string, period: PeriodId, interval: Interva
           setState((s) => (s.key === key ? { ...s, error: (err as Error).message } : s));
         }
       },
-      [key, symbol, interval],
+      [key, symbol, interval, period],
     ),
     open ? LIVE_MS : CLOSED_MS,
     ready,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { diffTail, mergeCandles, sessionFromIntraday } from './candles.ts';
+import { applyRefresh, diffTail, mergeCandles, sessionFromIntraday } from './candles.ts';
 import { dailyPrevClose, foldLiveTick } from '../../server/api.ts';
 import type { Candle } from './types.ts';
 
@@ -25,6 +25,19 @@ describe('mergeCandles', () => {
   it('ignores a poll that starts before the history', () => {
     const history = [bar(5), bar(6)];
     expect(mergeCandles(history, [bar(1), bar(7)])).toBe(history);
+  });
+});
+
+describe('applyRefresh', () => {
+  it('replaces the series when the poll covers the whole period (1D rolls to the new day)', () => {
+    const yesterday = [bar(1), bar(2), bar(3)];
+    const today = [bar(100), bar(101)];
+    expect(applyRefresh(yesterday, today, true)).toBe(today);
+  });
+  it('merges otherwise, and keeps history if the poll came back empty', () => {
+    expect(applyRefresh([bar(1), bar(2)], [bar(2, 50), bar(3)], false).map((c) => c.t)).toEqual([1, 2, 3]);
+    const h = [bar(1)];
+    expect(applyRefresh(h, [], true)).toBe(h);
   });
 });
 

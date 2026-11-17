@@ -338,7 +338,9 @@ function PriceChartImpl({
     }
     byTime.current = new Map(candles.map((c, i) => [shift(c.t) as number, i]));
     drawn.current = { version, candles };
-    if (fittedVersion.current !== version && candles.length > 0) {
+    // Refit for a new series, or when a refresh replaced it with a different span (new trading day).
+    const rolledOver = prev.version === version && prev.candles.length > 0 && candles.length > 0 && prev.candles[0].t !== candles[0].t;
+    if ((fittedVersion.current !== version || rolledOver) && candles.length > 0) {
       chart.timeScale().fitContent();
       fittedVersion.current = version;
     }
