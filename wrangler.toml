@@ -1,6 +1,6 @@
 # Cloudflare Worker: serves the built site from dist/ and the data API at /api/*.
 # `name` must match the Worker's name in the Cloudflare dashboard.
-name = "stockmarketview-v2"
+name = "stockmarketview"
 main = "worker/index.ts"
 compatibility_date = "2026-11-01"
 

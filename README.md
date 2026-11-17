@@ -2,7 +2,7 @@
 
 Free live stock charts for India (NSE, BSE) and the US (NYSE, NASDAQ). No sign-up, no ads, no paywall.
 
-**Live site: https://stockmarketview-v2.aishvaryaramesh.workers.dev**
+**Live site: https://stockmarketview.aishvaryaramesh.workers.dev**
 
 This is a rebuild of [StockMarketView v1](https://github.com/AishvaryaRamesh08/StockMarketView) (2021, Python Dash + Plotly + TA-Lib),
 which I wrote by hand during my undergrad degree. v2 is being built with AI-assisted development; a v1-vs-v2 comparison will be
@@ -112,9 +112,9 @@ Cloudflare rebuilds and redeploys on every push to `main`.
 One-time setup in the Cloudflare dashboard:
 
 1. **Workers & Pages → Create → Import a repository**, and pick this repository.
-2. Project name `stockmarketview-v2` (must match `name` in `wrangler.toml`), build command `npm run build`,
+2. Project name `stockmarketview` (must match `name` in `wrangler.toml`), build command `npm run build`,
    deploy command `npx wrangler deploy`.
-3. Deploy. The site goes live at `https://stockmarketview-v2.<your-subdomain>.workers.dev`.
+3. Deploy. The site goes live at `https://stockmarketview.<your-subdomain>.workers.dev`.
 
 `wrangler.toml` configures the Worker (`worker/index.ts`) and asset serving; `.node-version` pins Node 22 for the build.
 GitHub Actions (`.github/workflows/ci.yml`) runs the tests on every push.
