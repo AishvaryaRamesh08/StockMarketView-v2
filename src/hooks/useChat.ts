@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { converse, DEFAULT_MODEL, fallbackOrder, GeminiError, MODEL_RE, type Content, type FunctionCall, type GeminiSettings, type ToolOutcome } from '../lib/gemini.ts';
+import { converse, DEFAULT_MODEL, fallbackOrder, GeminiError, MODEL_RE, OLD_DEFAULT_MODEL, type Content, type FunctionCall, type GeminiSettings, type ToolOutcome } from '../lib/gemini.ts';
 import { TOOLS } from '../lib/chatTools.ts';
 import { load, save } from '../lib/storage.ts';
 
@@ -39,8 +39,12 @@ export interface ChatApi {
  */
 export function useChat(execute: (call: FunctionCall) => Promise<ToolOutcome>, system: () => string): ChatApi {
   const [settings, setSettings] = useState<GeminiSettings>(() => {
-    const s = load(SETTINGS_KEY, { key: '', model: DEFAULT_MODEL }, isSettings);
-    return { key: s.key, model: MODEL_RE.test(s.model) ? s.model : DEFAULT_MODEL };
+    const s = load(SETTINGS_KEY, { key: '', model: DEFAULT_MODEL }, isSettings) as GeminiSettings & { v?: number };
+    // Settings saved before version 2 holding the old default move to the new, faster one, once.
+    const migrate = !s.v && s.model === OLD_DEFAULT_MODEL;
+    const model = MODEL_RE.test(s.model) && !migrate ? s.model : DEFAULT_MODEL;
+    if (migrate && s.key) save(SETTINGS_KEY, { key: s.key, model, v: 2 });
+    return { key: s.key, model };
   });
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
@@ -101,13 +105,13 @@ export function useChat(execute: (call: FunctionCall) => Promise<ToolOutcome>, s
       setActiveModel(null);
       const next = { key: s.key.trim(), model: MODEL_RE.test(s.model.trim()) ? s.model.trim() : DEFAULT_MODEL };
       setSettings(next);
-      save(SETTINGS_KEY, next);
+      save(SETTINGS_KEY, { ...next, v: 2 });
     },
     removeKey: () => {
       abort.current?.abort();
       const next = { key: '', model: settings.model };
       setSettings(next);
-      save(SETTINGS_KEY, next);
+      save(SETTINGS_KEY, { ...next, v: 2 });
     },
     messages,
     busy,

@@ -53,7 +53,7 @@ added when the build is complete.
   indicators, compare, multi-timeframe, quotes, chart summaries, Markets page, watchlist) and answers beginner
   questions carried over from the v1 Rasa bot. It never gives buy/sell recommendations and cannot place trades.
   The key is stored only in the visitor's browser and sent only to Google (in a request header, never a URL); it
-  never reaches this site's Worker. The model is a setting (default `gemini-3.8-flash`); if it is overloaded or out of
+  never reaches this site's Worker. The model is a setting (default `gemini-3.5-flash-lite`, the fastest); if it is overloaded, slow or out of
   quota the chat falls back to another Gemini model and says so. Voice input uses the
   browser's built-in speech recognition and is hidden where the browser lacks it.
 - **Welcome guide**: a short first-visit introduction to the three pages and main features, reopened from **?**.

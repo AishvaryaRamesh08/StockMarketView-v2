@@ -37,12 +37,17 @@ export interface GeminiSettings {
   model: string;
 }
 
-export const DEFAULT_MODEL = 'gemini-3.8-flash';
+/** Light and fast, and usually has capacity when the bigger models are overloaded. */
+export const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
+/** The previous default; a saved setting still holding it moves to the new default. */
+export const OLD_DEFAULT_MODEL = 'gemini-3.8-flash';
 /** Offered in the model box; any model ID the visitor types is accepted. */
-export const SUGGESTED_MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-4-hydrogen'];
+export const SUGGESTED_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-4-hydrogen'];
+/** One request longer than this counts as Google being overloaded, and the next model is tried. */
+export const REQUEST_TIMEOUT_MS = 25_000;
 export const MODEL_RE = /^[a-z0-9][a-z0-9.\-]{1,62}$/i;
 
-export type GeminiErrorKind = 'key' | 'quota' | 'model' | 'network' | 'blocked' | 'server' | 'other';
+export type GeminiErrorKind = 'key' | 'quota' | 'model' | 'network' | 'blocked' | 'server' | 'timeout' | 'other';
 
 export class GeminiError extends Error {
   kind: GeminiErrorKind;
@@ -81,10 +86,11 @@ export async function generate(
   body: { systemInstruction: string; contents: Content[]; tools: FunctionDeclaration[] },
   signal?: AbortSignal,
   retryDelays = [1200, 3000],
+  timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<Content> {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await generateOnce(settings, body, signal);
+      return await generateOnce(settings, body, signal, timeoutMs);
     } catch (err) {
       if (!(err instanceof GeminiError) || err.kind !== 'server' || attempt >= retryDelays.length) throw err;
       await sleep(retryDelays[attempt], signal);
@@ -96,7 +102,29 @@ async function generateOnce(
   settings: GeminiSettings,
   body: { systemInstruction: string; contents: Content[]; tools: FunctionDeclaration[] },
   signal?: AbortSignal,
+  timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<Content> {
+  // Our own timeout on top of the visitor's Stop button: an overloaded model can hang for minutes.
+  const ctrl = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    ctrl.abort();
+  }, timeoutMs);
+  const onAbort = () => ctrl.abort();
+  signal?.addEventListener('abort', onAbort);
+  try {
+    return await request(settings, body, ctrl.signal);
+  } catch (err) {
+    if (timedOut && (err as Error).name === 'AbortError') throw new GeminiError('timeout', `${settings.model} took too long to answer.`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+async function request(settings: GeminiSettings, body: { systemInstruction: string; contents: Content[]; tools: FunctionDeclaration[] }, signal: AbortSignal): Promise<Content> {
   let res: Response;
   try {
     res = await fetch(`${ENDPOINT}${encodeURIComponent(settings.model)}:generateContent`, {
@@ -117,7 +145,10 @@ async function generateOnce(
     if ((err as Error).name === 'AbortError') throw err;
     throw new GeminiError('network', "Couldn't reach Google's Gemini service. Check your connection.");
   }
-  const json = (await res.json().catch(() => ({}))) as {
+  const json = (await res.json().catch((err: Error) => {
+    if (err.name === 'AbortError') throw err;
+    return {};
+  })) as {
     candidates?: Array<{ content?: Content; finishReason?: string }>;
     promptFeedback?: { blockReason?: string };
     error?: { message?: string; status?: string; details?: Array<{ reason?: string }> };
@@ -188,6 +219,7 @@ export async function converse(opts: {
   /** Try these models in turn if the first is overloaded or out of quota (only before any tool has run). */
   models?: string[];
   retryDelays?: number[];
+  timeoutMs?: number;
 }): Promise<{ history: Content[]; text: string; model: string }> {
   const models = opts.models?.length ? opts.models : [opts.settings.model];
   let mi = 0;
@@ -197,15 +229,15 @@ export async function converse(opts: {
     let reply: Content;
     for (;;) {
       try {
-        reply = await generate(settings, { systemInstruction: opts.system, contents: history, tools: opts.tools }, opts.signal, opts.retryDelays);
+        reply = await generate(settings, { systemInstruction: opts.system, contents: history, tools: opts.tools }, opts.signal, opts.retryDelays, opts.timeoutMs);
         break;
       } catch (err) {
-        const busy = err instanceof GeminiError && (err.kind === 'server' || err.kind === 'quota' || err.kind === 'model');
+        const busy = err instanceof GeminiError && (err.kind === 'server' || err.kind === 'timeout' || err.kind === 'quota' || err.kind === 'model');
         // Switching models mid-way through tool calls would break Gemini's thought signatures.
         if (!busy || step > 0 || mi + 1 >= models.length) throw err;
         const from = settings.model;
         settings = { ...settings, model: models[++mi] };
-        opts.onNote?.(`${from} is ${err.kind === 'quota' ? 'out of quota' : err.kind === 'model' ? 'not available' : 'busy'} right now, switched to ${settings.model}`);
+        opts.onNote?.(`${from} is ${err.kind === 'quota' ? 'out of quota' : err.kind === 'model' ? 'not available' : err.kind === 'timeout' ? 'too slow' : 'busy'} right now, switched to ${settings.model}`);
       }
     }
     history = [...history, reply];

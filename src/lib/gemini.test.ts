@@ -145,3 +145,31 @@ describe('model fallback', () => {
     expect(n).toBe(1);
   });
 });
+
+describe('slow models', () => {
+  it('gives up on a request that hangs and moves to the next model', async () => {
+    const seen: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init: RequestInit) => {
+        const model = url.split('/models/')[1].split(':')[0];
+        seen.push(model);
+        if (model === 'slow-model')
+          return new Promise<Response>((_, reject) => init.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError'))));
+        return Promise.resolve(reply([{ text: 'fast answer' }]));
+      }),
+    );
+    const notes: string[] = [];
+    const r = await converse({ settings, system: 's', history: [], message: 'hi', tools: [], execute: async () => ({ result: {} }), onNote: (n) => notes.push(n), models: ['slow-model', 'fast-model'], timeoutMs: 20 });
+    expect(r.text).toBe('fast answer');
+    expect(seen).toEqual(['slow-model', 'fast-model']);
+    expect(notes[0]).toMatch(/slow-model is too slow right now, switched to fast-model/);
+  });
+  it('still lets the visitor stop a request', async () => {
+    vi.stubGlobal('fetch', vi.fn((_u: string, init: RequestInit) => new Promise<Response>((_, reject) => init.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError'))))));
+    const ctrl = new AbortController();
+    const p = converse({ settings, system: 's', history: [], message: 'hi', tools: [], execute: async () => ({ result: {} }), signal: ctrl.signal, models: ['a-model', 'b-model'] });
+    ctrl.abort();
+    await expect(p).rejects.toThrow(/Abort/);
+  });
+});
