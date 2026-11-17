@@ -44,6 +44,16 @@ added when the build is complete.
 - **Drawing tools**: trendline, horizontal level, rectangle, Fibonacci retracement and text notes. Select, drag to
   move, undo/redo (Cmd/Ctrl+Z), Delete to remove. Drawings are anchored to price and time, so they stay put when
   you change period or interval, and are saved per stock in this browser.
+- **Replay**: step through a stock's past candles one at a time (or play them at 1–10 candles a second) from any
+  start date, with the future hidden and indicators computed only from what has happened so far. A separate
+  practice account (₹1,00,000 / $10,000) trades at each candle's close, and your result is shown against buy and
+  hold. You can step back to look, but trades only happen on the furthest candle reached.
+- **Pattern track record**: below the chart, every candlestick pattern's history on that stock over 10 years of
+  daily candles: how many times it formed, how often the price went the expected way 5, 10 or 20 days later, the
+  average, best and worst move, and whether that beats the stock's normal behaviour (its base rate).
+- **What if you had invested**: a monthly SIP or a one-time investment in the stock from 1, 3, 5 or 10 years ago,
+  on real split-adjusted closes, against the NIFTY 50 / S&P 500 and a fixed deposit, with XIRR or CAGR and a value
+  chart. Dividends, taxes and fees are not included.
 - **Image export**: download or copy the chart as a PNG with a caption (stock, timeframe, date) and no watermark.
 - **Shareable links**: the address bar always describes the chart on screen (stock, period, interval, indicators,
   compare, layout), and Share copies it. Drawings are not part of links; share them as an image.
@@ -96,6 +106,9 @@ Yahoo Finance chart + spark endpoints
   Work that needs one request per stock runs in GitHub Actions instead (`.github/workflows/market-data.yml`):
   the pattern scan after each close and the constituent list weekly. Results are published as assets of the
   `data` release, which the API reads and caches.
+- **Long history**: the pattern track record and the what-if calculator share one 10-year daily request per stock
+  (plus one for the index), made only when those cards scroll into view and kept for the rest of the visit. Replay
+  loads one longer history for the chosen interval when it starts.
 - **News**: `/api/news` reads the publishers' RSS feeds and caches the headlines for an hour, so each visitor costs one
   request an hour for news. The movers snapshot is cached for 2 minutes and polled every 2 minutes.
 

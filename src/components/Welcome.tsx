@@ -32,6 +32,8 @@ const FEATURES = [
   ['Hover or tap', 'any term with a dotted underline or a ? to see what it means'],
   ['Star', 'stocks to keep them in your watchlists on the left'],
   ['Draw, save and share', 'trend lines and notes, chart images and links'],
+  ['Replay', 'past markets candle by candle and practise trading without seeing the future'],
+  ['Below each chart', 'how often each pattern worked on that stock, and what a SIP or lump sum would be worth today'],
 ];
 
 /** First-visit introduction; reopened from the ? button in the top bar. */

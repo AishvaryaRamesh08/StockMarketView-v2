@@ -21,6 +21,10 @@ import { PriceChart } from './components/PriceChart.tsx';
 import { QuoteHeader } from './components/QuoteHeader.tsx';
 import { SearchPalette, rememberRecent, type PaletteAction, type SearchMode } from './components/SearchPalette.tsx';
 import { SimilarStocks } from './components/SimilarStocks.tsx';
+import { PatternTrackRecord } from './components/PatternTrackRecord.tsx';
+import { WhatIf } from './components/WhatIf.tsx';
+import { ReplayBar } from './components/ReplayBar.tsx';
+import { useReplay } from './hooks/useReplay.ts';
 import { WatchlistPanel } from './components/WatchlistPanel.tsx';
 import { Welcome } from './components/Welcome.tsx';
 import { useFillHeight } from './hooks/useFillHeight.ts';
@@ -74,6 +78,7 @@ interface Prefs {
 }
 
 const PREFS_KEY = 'smv.chart';
+const NO_COMPARE: never[] = [];
 
 function inIndia(): boolean {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -183,6 +188,8 @@ export function App() {
   const chartPanel = useRef<HTMLElement>(null);
   // Maximized chart: only the top bar, the chart controls and the chart. Not remembered across visits.
   const [focus, setFocus] = useState(false);
+  // Replay mode: past candles one at a time with a practice account. Not remembered.
+  const [replayOn, setReplayOn] = useState(false);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 2600);
@@ -391,6 +398,7 @@ export function App() {
       { id: 'view-markets', label: 'Go to Markets', keywords: 'pulse movers gainers losers news headlines home overview', run: () => update({ view: 'markets' }) },
       { id: 'view-chart', label: 'Go to Chart', keywords: 'candles', run: () => update({ view: 'chart' }) },
       { id: 'view-portfolio', label: 'Go to Portfolio', keywords: 'paper trading holdings positions p&l account', run: () => update({ view: 'portfolio' }) },
+      { id: 'replay', label: replayOn ? 'Exit replay' : `Replay ${symbol.replace(/\.(NS|BO)$/, '')} candle by candle`, keywords: 'replay practice backtest history past step', run: () => { update({ view: 'chart', layout: 'single' }); setReplayOn((v) => !v); } },
       { id: 'help', label: 'What can this site do?', keywords: 'help about welcome guide tour features', run: () => setWelcome(true) },
       { id: 'focus', label: focus ? 'Exit full-screen chart' : 'Maximize chart', keywords: 'full screen fullscreen focus expand zoom', run: () => { update({ view: 'chart' }); setFocus((f) => !f); } },
       { id: 'trade', label: prefs.tradeOpen && prefs.sideTab === 'trade' ? 'Close trade panel' : `Paper trade ${symbol}`, keywords: 'buy sell order ticket paper', run: () => update((p) => ({ view: 'chart', tradeOpen: !(p.tradeOpen && p.sideTab === 'trade'), sideTab: 'trade' })) },
@@ -420,7 +428,7 @@ export function App() {
         },
       })),
     ],
-    [appearance, prefs.layout, prefs.sidebar, prefs.overlays, prefs.tradeOpen, prefs.sideTab, focus, symbol, watched, wl, update, toggleOverlay],
+    [appearance, prefs.layout, prefs.sidebar, prefs.overlays, prefs.tradeOpen, prefs.sideTab, focus, replayOn, symbol, watched, wl, update, toggleOverlay],
   );
 
   /* ------------------------------ image + share ------------------------------ */
@@ -491,6 +499,35 @@ export function App() {
   const sideTab = prefs.view === 'chart' ? prefs.sideTab : 'chat';
   const openSide = (tab: 'trade' | 'chat') => update((p) => ({ tradeOpen: !(p.tradeOpen && p.sideTab === tab), sideTab: tab }));
   const focusMode = focus && prefs.view === 'chart';
+  const replaying = replayOn && prefs.view === 'chart' && layout === 'single';
+  const replay = useReplay(symbol, interval, marketOf(symbol), replaying);
+  const replayTrades = useMemo<TradeMark[]>(() => (replay ? replay.account.trades.map((t) => ({ t: t.t, side: t.side, qty: t.qty })) : []), [replay?.account.trades]);
+  const replayLines = useMemo<TradeLine[]>(() => (replay && replay.account.qty ? [{ price: replay.account.avg, title: `Avg cost (${replay.account.qty})`, kind: 'avg' }] : []), [replay?.account.qty, replay?.account.avg]);
+  // Replay: → next candle, ← back, space play/pause, Esc leaves replay.
+  const replayKeys = useRef(replay);
+  replayKeys.current = replay;
+  useEffect(() => {
+    if (!replaying) return;
+    const onKey = (e: KeyboardEvent) => {
+      const r = replayKeys.current;
+      const t = e.target as HTMLElement;
+      if (!r || r.status !== 'ready' || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable) return;
+      if (document.querySelector('.palette-backdrop, .welcome-backdrop')) return;
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        r.step(1);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        r.step(-1);
+      } else if (e.key === ' ' && !(t instanceof HTMLButtonElement)) {
+        e.preventDefault();
+        r.togglePlay();
+      } else if (e.key === 'Escape' && !focus) setReplayOn(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [replaying, focus]);
+
   const glanceParts = useMemo(() => (chart.status === 'ready' ? summarize(chart.candles, interval, quote?.high52) : []), [chart.status, chart.candles, interval, quote?.high52]);
   useStickyPanels();
   useFillHeight(chartPanel, 320, focusMode ? 12 : 16, [prefs.view, layout, chart.status === 'error', focusMode]);
@@ -601,7 +638,17 @@ export function App() {
           </main>
         ) : (
         <main className="workspace">
-          {!focusMode && (
+          {replay && (
+            <ReplayBar
+              r={replay}
+              name={quote?.name ?? symbol}
+              intervalLabel={({ '1d': 'Daily', '1wk': 'Weekly', '1mo': 'Monthly' } as Record<string, string>)[interval] ?? `${INTERVALS.find((i) => i.id === interval)!.label} candles`}
+              intraday={intraday}
+              currency={quote?.currency ?? (marketOf(symbol) === 'IN' ? 'INR' : 'USD')}
+              onExit={() => setReplayOn(false)}
+            />
+          )}
+          {!focusMode && !replay && (
             <>
               <QuoteHeader
                 symbol={symbol}
@@ -620,12 +667,13 @@ export function App() {
           )}
 
 
-          <div className="toolbar-row">
+          <div className={`toolbar-row ${replay ? 'replaying' : ''}`}>
             {layout === 'single' ? <ChartToolbar period={period} interval={interval} onPeriod={setPeriod} onInterval={setInterval} /> : <div className="toolbar-hint">Each chart has its own period and interval. Move the crosshair on one to line up all three.</div>}
           </div>
 
           <div className="actions-row">
             <div className="tools">
+              {!replay && (
               <button
                 className={`tool-btn trade-btn ${prefs.tradeOpen && prefs.sideTab === 'trade' ? 'pressed' : ''} ${attention ? 'attention' : ''}`}
                 onClick={() => openSide('trade')}
@@ -644,8 +692,26 @@ export function App() {
                   </>
                 )}
               </button>
+              )}
               <OverlayMenu active={overlays} intraday={intraday} barCount={chart.candles.length} onToggle={toggleOverlay} onClear={() => update({ overlays: [] })} />
               {layout === 'single' && (
+                <button
+                  className={`tool-btn replay-btn ${replay ? 'pressed' : ''}`}
+                  onClick={() => {
+                    if (!replayOn) update((p) => (p.sideTab === 'trade' ? { tradeOpen: false } : {}));
+                    setReplayOn((v) => !v);
+                  }}
+                  aria-pressed={!!replay}
+                  aria-label={replay ? 'Exit replay' : 'Replay past candles'}
+                  title="Replay: step through past candles one at a time and practise trading without seeing the future"
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden>
+                    <path d="M4 10a6 6 0 1 0 2-4.5M4 3v3h3" />
+                  </svg>
+                  <span className="btn-label">{replay ? 'Exit replay' : 'Replay'}</span>
+                </button>
+              )}
+              {layout === 'single' && !replay && (
                 <button className="tool-btn" aria-label="Compare with other stocks" onClick={() => setSearch('compare')} disabled={prefs.compare.length >= MAX_COMPARE} title={prefs.compare.length >= MAX_COMPARE ? `Up to ${MAX_COMPARE} comparisons` : 'Overlay other stocks as % change'}>
                   <svg viewBox="0 0 20 20" aria-hidden>
                     <path d="M3 14l4-5 3 3 6-7M3 17h14" />
@@ -668,7 +734,7 @@ export function App() {
                 </button>
               </div>
             </div>
-            {layout === 'single' && chart.status !== 'error' && (
+            {layout === 'single' && chart.status !== 'error' && !replay && (
               <ChartActions
                 tool={tool}
                 onTool={(t) => {
@@ -737,7 +803,32 @@ export function App() {
             <MultiTimeframe symbol={symbol} frames={prefs.frames} overlays={overlays} onFramesChange={(frames) => update({ frames })} />
           ) : (
             <section className="chart-panel" aria-label="Price chart" ref={chartPanel}>
-              {chart.status === 'error' ? (
+              {replay ? (
+                replay.status === 'ready' ? (
+                  <PriceChart
+                    candles={replay.visible}
+                    version={`replay:${symbol}:${interval}:${replay.session}`}
+                    timezone={timezone}
+                    currency={quote?.currency ?? 'USD'}
+                    digits={digitsFor(quote?.priceHint, quote?.price ?? null)}
+                    intraday={intraday}
+                    overlays={overlays}
+                    compare={NO_COMPARE}
+                    lastBarLive={false}
+                    onScreenshotReady={onScreenshotReady}
+                    trades={replayTrades}
+                    tradeLines={replayLines}
+                    initialBars={intraday ? 120 : 160}
+                  />
+                ) : replay.status === 'error' ? (
+                  <div className="chart-message">
+                    <h2>Replay history didn't load</h2>
+                    <p>{replay.error}</p>
+                  </div>
+                ) : (
+                  <div className="chart-skeleton skeleton" aria-label="Loading replay" />
+                )
+              ) : chart.status === 'error' ? (
                 <div className="chart-message">
                   {chart.notFound ? (
                     <>
@@ -799,6 +890,13 @@ export function App() {
               onOpen={selectSymbol}
               onCompare={(s) => update((p) => ({ compare: p.compare.includes(s) ? p.compare.filter((c) => c !== s) : [...p.compare, s].slice(0, MAX_COMPARE) }))}
             />
+          )}
+
+          {layout === 'single' && !focusMode && (
+            <>
+              <PatternTrackRecord symbol={symbol} active={overlays} onShow={(id) => !overlays.has(id) && toggleOverlay(id)} />
+              <WhatIf key={symbol} symbol={symbol} currency={quote?.currency ?? (marketOf(symbol) === 'IN' ? 'INR' : 'USD')} />
+            </>
           )}
         </main>
         )}

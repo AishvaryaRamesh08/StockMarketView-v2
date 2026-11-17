@@ -69,6 +69,8 @@ interface Props {
   /** Paper-trading fills to mark, and working orders / average cost to draw as lines. */
   trades?: TradeMark[];
   tradeLines?: TradeLine[];
+  /** On a new series, show only the last this-many candles instead of fitting everything (replay). */
+  initialBars?: number;
 }
 
 export interface TradeMark {
@@ -179,6 +181,7 @@ function PriceChartImpl({
   onScreenshotReady,
   trades = NO_TRADES,
   tradeLines = NO_TRADE_LINES,
+  initialBars,
 }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const legend = useRef<HTMLDivElement>(null);
@@ -386,11 +389,12 @@ function PriceChartImpl({
     // Refit for a new series, or when a refresh replaced it with a different span (new trading day).
     const rolledOver = prev.version === version && prev.candles.length > 0 && candles.length > 0 && prev.candles[0].t !== candles[0].t;
     if ((fittedVersion.current !== version || rolledOver) && candles.length > 0) {
-      chart.timeScale().fitContent();
+      if (initialBars && candles.length > initialBars) chart.timeScale().setVisibleLogicalRange({ from: candles.length - initialBars, to: candles.length + 3 });
+      else chart.timeScale().fitContent();
       fittedVersion.current = version;
     }
     renderLegend(undefined);
-  }, [candles, version, shift]);
+  }, [candles, version, shift, initialBars]);
 
   /* ------------------------------- studies ------------------------------- */
   useEffect(() => {
