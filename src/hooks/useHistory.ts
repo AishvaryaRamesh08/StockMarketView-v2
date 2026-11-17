@@ -38,29 +38,39 @@ export function useDailyHistory(symbol: string | null, enabled: boolean): Histor
   return state.key === symbol ? state : { candles: null, error: null };
 }
 
-/** True once the element has come near the viewport; stays true. Saves requests for cards nobody scrolls to. */
-export function useSeen(ref: RefObject<Element | null>, margin = '200px'): boolean {
+/**
+ * True once the element has come near the viewport; stays true. Saves requests for cards nobody
+ * scrolls to. IntersectionObserver does the work; a plain position check on scroll and resize
+ * backs it up, since some embedded or background views never deliver observer callbacks.
+ */
+export function useSeen(ref: RefObject<Element | null>, marginPx = 200): boolean {
   const [seen, setSeen] = useState(false);
   const done = useRef(false);
   useEffect(() => {
     const el = ref.current;
     if (!el || done.current) return;
-    if (typeof IntersectionObserver === 'undefined') {
+    const mark = () => {
+      if (done.current) return;
+      done.current = true;
       setSeen(true);
-      return;
+      cleanup();
+    };
+    const near = () => {
+      const r = el.getBoundingClientRect();
+      if (r.top < window.innerHeight + marginPx && r.bottom > -marginPx) mark();
+    };
+    const io = typeof IntersectionObserver !== 'undefined' ? new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && mark(), { rootMargin: `${marginPx}px` }) : null;
+    io?.observe(el);
+    window.addEventListener('scroll', near, { passive: true });
+    window.addEventListener('resize', near);
+    const first = setTimeout(near, 0);
+    function cleanup() {
+      io?.disconnect();
+      clearTimeout(first);
+      window.removeEventListener('scroll', near);
+      window.removeEventListener('resize', near);
     }
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          done.current = true;
-          setSeen(true);
-          io.disconnect();
-        }
-      },
-      { rootMargin: margin },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [ref, margin]);
+    return cleanup;
+  }, [ref, marginPx]);
   return seen;
 }
