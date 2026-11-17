@@ -106,12 +106,12 @@ export function ChartActions(p: Props) {
 
       <div className="share-tools">
         <div className="menu-root" ref={exportRoot}>
-          <button className="tool-btn" onClick={() => setExportOpen((o) => !o)} aria-expanded={exportOpen} aria-haspopup="menu">
+          <button className="tool-btn" onClick={() => setExportOpen((o) => !o)} aria-expanded={exportOpen} aria-haspopup="menu" title="Download or copy a picture of the chart" aria-label="Chart image">
             <svg viewBox="0 0 20 20" aria-hidden>
               <rect x="3" y="4" width="14" height="11" rx="1.5" />
               <path d="M6 12l3-3 2 2 3-3" />
             </svg>
-            Image
+            <span className="btn-label">Image</span>
           </button>
           {exportOpen && (
             <div className="menu export-menu" role="menu">
@@ -136,11 +136,11 @@ export function ChartActions(p: Props) {
             </div>
           )}
         </div>
-        <button className="tool-btn" onClick={p.onShare} title="Copy a link that opens this chart">
+        <button className="tool-btn" onClick={p.onShare} title="Copy a link that opens this chart" aria-label="Share link">
           <svg viewBox="0 0 20 20" aria-hidden>
             <path d="M8 12l4-4M7 9.5l-1.5 1.5a2.5 2.5 0 0 0 3.5 3.5L10.5 13M13 10.5l1.5-1.5A2.5 2.5 0 0 0 11 5.5L9.5 7" />
           </svg>
-          Share
+          <span className="btn-label">Share</span>
         </button>
       </div>
     </div>

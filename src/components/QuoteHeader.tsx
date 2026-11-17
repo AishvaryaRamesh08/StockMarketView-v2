@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNow } from '../hooks/useNow.ts';
 import { digitsFor, formatAgo, formatChange, formatLocalTime, formatMarketCap, formatPct, formatPrice, formatVolume } from '../lib/format.ts';
 import { marketOf, marketStatus } from '../lib/markets.ts';
@@ -16,6 +16,8 @@ interface Props {
   watched: boolean;
   watchlistName: string;
   onToggleWatch: () => void;
+  /** Shown at the end of the name line (the "At a glance" toggle). */
+  extra?: ReactNode;
 }
 
 /** Briefly flashes green/red when the price changes. */
@@ -62,7 +64,7 @@ function Freshness({ symbol, lastUpdated, refreshError, quote }: { symbol: strin
   );
 }
 
-export function QuoteHeader({ symbol, quote, profile, loading, lastUpdated, refreshError, watched, watchlistName, onToggleWatch }: Props) {
+export function QuoteHeader({ symbol, quote, profile, loading, lastUpdated, refreshError, watched, watchlistName, onToggleWatch, extra }: Props) {
   const flash = useFlash(quote?.price);
   const market = marketOf(symbol);
 
@@ -91,33 +93,40 @@ export function QuoteHeader({ symbol, quote, profile, loading, lastUpdated, refr
   return (
     <header className="quote-header">
       <div className="quote-title">
-        <div className="quote-name-row">
-          <h1>{quote.name}</h1>
-          <button
-            className={`star-btn ${watched ? 'on' : ''}`}
-            onClick={onToggleWatch}
-            aria-pressed={watched}
-            title={watched ? `Remove from “${watchlistName}”` : `Add to “${watchlistName}”`}
-            aria-label={watched ? `Remove from watchlist ${watchlistName}` : `Add to watchlist ${watchlistName}`}
-          >
-            <svg viewBox="0 0 20 20" aria-hidden>
-              <path d="M10 2.5l2.3 4.8 5.2.7-3.8 3.6.9 5.2L10 14.3l-4.6 2.5.9-5.2L2.5 8l5.2-.7z" />
-            </svg>
-          </button>
-        </div>
-        <div className="quote-meta">
+        <h1 title={quote.name}>{quote.name}</h1>
+        <button
+          className={`star-btn ${watched ? 'on' : ''}`}
+          onClick={onToggleWatch}
+          aria-pressed={watched}
+          title={watched ? `Remove from “${watchlistName}”` : `Add to “${watchlistName}”`}
+          aria-label={watched ? `Remove from watchlist ${watchlistName}` : `Add to watchlist ${watchlistName}`}
+        >
+          <svg viewBox="0 0 20 20" aria-hidden>
+            <path d="M10 2.5l2.3 4.8 5.2.7-3.8 3.6.9 5.2L10 14.3l-4.6 2.5.9-5.2L2.5 8l5.2-.7z" />
+          </svg>
+        </button>
+        <span className="quote-meta">
           <span className="ticker">{symbol.replace(/\.(NS|BO)$/, '')}</span>
           <span className="badge">{quote.exchange || (market === 'IN' ? 'India' : 'US')}</span>
           <span className="badge subtle">{quote.currency}</span>
           <MarketStatusPill market={market} compact />
-        </div>
+        </span>
+        {profile?.sector && (
+          <span className="quote-sector" title={profile.industry ? `${profile.sector} · ${profile.industry}` : profile.sector}>
+            {profile.sector}
+            {profile.industry && <span className="dd-sub"> · {profile.industry}</span>}
+          </span>
+        )}
+        {extra}
       </div>
 
       <div className="quote-price-block">
-        <div className={`quote-price num ${flash}`}>{formatPrice(quote.price, quote.currency, digits)}</div>
-        <div className={`quote-change num ${dir}`}>
-          {formatChange(quote.change, quote.currency, digits)} ({formatPct(quote.changePct)})
-          <span className="quote-change-label">today</span>
+        <div className="quote-price-row">
+          <div className={`quote-price num ${flash}`}>{formatPrice(quote.price, quote.currency, digits)}</div>
+          <div className={`quote-change num ${dir}`}>
+            {formatChange(quote.change, quote.currency, digits)} ({formatPct(quote.changePct)})
+            <span className="quote-change-label">today</span>
+          </div>
         </div>
         <Freshness symbol={symbol} lastUpdated={lastUpdated} refreshError={refreshError} quote={quote} />
       </div>
@@ -169,15 +178,6 @@ export function QuoteHeader({ symbol, quote, profile, loading, lastUpdated, refr
               </InfoTip>
             </dt>
             <dd className="num">{profile.pe.toFixed(1)}</dd>
-          </div>
-        )}
-        {profile?.sector && (
-          <div>
-            <dt>Sector</dt>
-            <dd>
-              {profile.sector}
-              {profile.industry && <span className="dd-sub"> · {profile.industry}</span>}
-            </dd>
           </div>
         )}
       </dl>

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppearanceMenu } from './components/AppearanceMenu.tsx';
 import { ChartActions, TextNoteInput } from './components/ChartActions.tsx';
-import { ChartSummary } from './components/ChartSummary.tsx';
+import { ChartSummary, GlanceToggle } from './components/ChartSummary.tsx';
+import { summarize } from './lib/summary.ts';
 import type { TextRequest } from './components/drawingController.ts';
 import { ChartToolbar } from './components/ChartToolbar.tsx';
 import { IndexStrip, STRIP_INDICES } from './components/IndexStrip.tsx';
@@ -18,6 +19,8 @@ import { QuoteHeader } from './components/QuoteHeader.tsx';
 import { SearchPalette, rememberRecent, type PaletteAction, type SearchMode } from './components/SearchPalette.tsx';
 import { SimilarStocks } from './components/SimilarStocks.tsx';
 import { WatchlistPanel } from './components/WatchlistPanel.tsx';
+import { Welcome } from './components/Welcome.tsx';
+import { useFillHeight } from './hooks/useFillHeight.ts';
 import { MAX_COMPARE, useCompare } from './hooks/useCompare.ts';
 import { useDailyPatterns } from './hooks/useDailyPatterns.ts';
 import { useDrawings } from './hooks/useDrawings.ts';
@@ -60,6 +63,8 @@ interface Prefs {
   portfolioMarket: MarketId;
   /** Trade panel beside the chart. */
   tradeOpen: boolean;
+  /** "At a glance" summary expanded under the quote header. */
+  glance: boolean;
 }
 
 const PREFS_KEY = 'smv.chart';
@@ -87,6 +92,7 @@ const DEFAULT_PREFS: Prefs = {
   pulseMarket: inIndia() ? 'IN' : 'US',
   portfolioMarket: inIndia() ? 'IN' : 'US',
   tradeOpen: false,
+  glance: false,
 };
 
 /** Accepts prefs saved by older versions (Phase 1 saved only symbol/period/interval). */
@@ -104,6 +110,7 @@ function loadPrefs(): Prefs {
   if (raw.view === 'markets' || raw.view === 'chart' || raw.view === 'portfolio') p.view = raw.view;
   if (isMarketId(raw.portfolioMarket)) p.portfolioMarket = raw.portfolioMarket;
   if (typeof raw.tradeOpen === 'boolean') p.tradeOpen = raw.tradeOpen;
+  if (typeof raw.glance === 'boolean') p.glance = raw.glance;
   if (isMarketId(raw.pulseMarket)) p.pulseMarket = raw.pulseMarket;
   return p;
 }
@@ -152,6 +159,22 @@ export function App() {
   }, [prefs]);
 
   const [toast, setToast] = useState<string | null>(null);
+  // First visit: introduce the site, then briefly highlight the view tabs and the trade button.
+  const [welcome, setWelcome] = useState(() => !load('smv.welcomed', false, (v): v is boolean => typeof v === 'boolean'));
+  const [attention, setAttention] = useState(false);
+  const closeWelcome = useCallback(() => {
+    setWelcome(false);
+    save('smv.welcomed', true);
+    setAttention(true);
+  }, []);
+  useEffect(() => {
+    if (!attention) return;
+    const t = setTimeout(() => setAttention(false), 4200);
+    return () => clearTimeout(t);
+  }, [attention]);
+  const chartPanel = useRef<HTMLElement>(null);
+  // Maximized chart: only the top bar, the chart controls and the chart. Not remembered across visits.
+  const [focus, setFocus] = useState(false);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 2600);
@@ -308,6 +331,20 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [prefs.view, prefs.layout, tool, selectedId, draw]);
 
+  // F toggles the maximized chart; Esc leaves it once nothing else (a drawing tool, a selection) wants Esc.
+  useEffect(() => {
+    if (prefs.view !== 'chart') return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable) return;
+      if (document.querySelector('.palette-backdrop, .welcome-backdrop')) return;
+      if (e.key === 'Escape' && focus && !tool && !selectedId) setFocus(false);
+      else if (e.key.toLowerCase() === 'f' && !e.metaKey && !e.ctrlKey && !e.altKey) setFocus((f) => !f);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [prefs.view, focus, tool, selectedId]);
+
   // Cmd/Ctrl+K or "/" opens search from anywhere.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -332,6 +369,8 @@ export function App() {
       { id: 'view-markets', label: 'Go to Markets', keywords: 'pulse heatmap movers home overview', run: () => update({ view: 'markets' }) },
       { id: 'view-chart', label: 'Go to Chart', keywords: 'candles', run: () => update({ view: 'chart' }) },
       { id: 'view-portfolio', label: 'Go to Portfolio', keywords: 'paper trading holdings positions p&l account', run: () => update({ view: 'portfolio' }) },
+      { id: 'help', label: 'What can this site do?', keywords: 'help about welcome guide tour features', run: () => setWelcome(true) },
+      { id: 'focus', label: focus ? 'Exit full-screen chart' : 'Maximize chart', keywords: 'full screen fullscreen focus expand zoom', run: () => { update({ view: 'chart' }); setFocus((f) => !f); } },
       { id: 'trade', label: prefs.tradeOpen ? 'Close trade panel' : `Paper trade ${symbol}`, keywords: 'buy sell order ticket paper', run: () => update((p) => ({ view: 'chart', tradeOpen: !p.tradeOpen })) },
       { id: 'market-in', label: 'Markets: show India', keywords: 'nifty nse', run: () => update({ view: 'markets', pulseMarket: 'IN' }) },
       { id: 'market-us', label: 'Markets: show US', keywords: 's&p nasdaq nyse', run: () => update({ view: 'markets', pulseMarket: 'US' }) },
@@ -358,7 +397,7 @@ export function App() {
         },
       })),
     ],
-    [appearance, prefs.layout, prefs.sidebar, prefs.overlays, prefs.tradeOpen, symbol, watched, wl, update, toggleOverlay],
+    [appearance, prefs.layout, prefs.sidebar, prefs.overlays, prefs.tradeOpen, focus, symbol, watched, wl, update, toggleOverlay],
   );
 
   /* ------------------------------ image + share ------------------------------ */
@@ -425,6 +464,9 @@ export function App() {
   );
 
   const tradeVisible = prefs.view === 'chart' && prefs.tradeOpen;
+  const focusMode = focus && prefs.view === 'chart';
+  const glanceParts = useMemo(() => (chart.status === 'ready' ? summarize(chart.candles, interval, quote?.high52) : []), [chart.status, chart.candles, interval, quote?.high52]);
+  useFillHeight(chartPanel, 320, focusMode ? 12 : 16, [prefs.view, layout, chart.status === 'error', focusMode]);
 
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -433,7 +475,7 @@ export function App() {
   );
 
   return (
-    <div className="app">
+    <div className={`app ${focusMode ? 'focus-mode' : ''}`}>
       <header className="topbar">
         <button
           className="icon-btn sidebar-toggle"
@@ -455,14 +497,23 @@ export function App() {
           <span>StockMarketView</span>
         </a>
 
-        <nav className="view-tabs" aria-label="Views">
-          <button className={prefs.view === 'markets' ? 'active' : ''} aria-current={prefs.view === 'markets' ? 'page' : undefined} onClick={() => update({ view: 'markets' })}>
+        <nav className={`view-tabs ${attention ? 'attention' : ''}`} aria-label="Views">
+          <button className={prefs.view === 'markets' ? 'active' : ''} aria-current={prefs.view === 'markets' ? 'page' : undefined} onClick={() => update({ view: 'markets' })} title="Today's market overview">
+            <svg viewBox="0 0 20 20" aria-hidden>
+              <path d="M3 3h6v8H3zM11 3h6v5h-6zM11 10h6v7h-6zM3 13h6v4H3z" />
+            </svg>
             Markets
           </button>
-          <button className={prefs.view === 'chart' ? 'active' : ''} aria-current={prefs.view === 'chart' ? 'page' : undefined} onClick={() => update({ view: 'chart' })}>
+          <button className={prefs.view === 'chart' ? 'active' : ''} aria-current={prefs.view === 'chart' ? 'page' : undefined} onClick={() => update({ view: 'chart' })} title="Live chart of the selected stock">
+            <svg viewBox="0 0 20 20" aria-hidden>
+              <path d="M3 15l4-5 3 3 7-8M3 18h14" />
+            </svg>
             Chart<span className="view-sym"> · {symbol.replace(/\.(NS|BO)$/, '').replace(/^\^/, '')}</span>
           </button>
-          <button className={prefs.view === 'portfolio' ? 'active' : ''} aria-current={prefs.view === 'portfolio' ? 'page' : undefined} onClick={() => update({ view: 'portfolio' })}>
+          <button className={prefs.view === 'portfolio' ? 'active' : ''} aria-current={prefs.view === 'portfolio' ? 'page' : undefined} onClick={() => update({ view: 'portfolio' })} title="Your paper trading account">
+            <svg viewBox="0 0 20 20" aria-hidden>
+              <path d="M3 7h14v10H3zM7 7V4h6v3M3 11h14" />
+            </svg>
             Portfolio
           </button>
         </nav>
@@ -477,16 +528,19 @@ export function App() {
         </button>
 
         <div className="topbar-status">
+          <button className="icon-btn help-btn" onClick={() => setWelcome(true)} aria-label="What can this site do?" title="What can this site do?">
+            ?
+          </button>
           <AppearanceMenu />
           <MarketStatusPill market="IN" />
           <MarketStatusPill market="US" />
         </div>
       </header>
 
-      <IndexStrip quotes={quotes} active={symbol} onSelect={selectSymbol} />
+      {!focusMode && <IndexStrip quotes={quotes} active={symbol} onSelect={selectSymbol} />}
 
-      <div className={`body ${prefs.sidebar ? 'with-sidebar' : ''} ${tradeVisible ? 'with-trade' : ''}`}>
-        {prefs.sidebar && <div className="sidebar-desktop">{panel()}</div>}
+      <div className={`body ${prefs.sidebar && !focusMode ? 'with-sidebar' : ''} ${tradeVisible ? 'with-trade' : ''}`}>
+        {prefs.sidebar && !focusMode && <div className="sidebar-desktop">{panel()}</div>}
 
         {prefs.view === 'markets' ? (
           <main className="workspace">
@@ -498,39 +552,59 @@ export function App() {
           </main>
         ) : (
         <main className="workspace">
-          <QuoteHeader
-            symbol={symbol}
-            quote={quote}
-            profile={profile}
-            loading={chart.status === 'loading'}
-            lastUpdated={chart.lastUpdated}
-            refreshError={chart.error && chart.status === 'ready' ? chart.error : null}
-            watched={watched}
-            watchlistName={wl.active.name}
-            onToggleWatch={() => wl.toggle(symbol)}
-          />
+          {!focusMode && (
+            <>
+              <QuoteHeader
+                symbol={symbol}
+                quote={quote}
+                profile={profile}
+                loading={chart.status === 'loading'}
+                lastUpdated={chart.lastUpdated}
+                refreshError={chart.error && chart.status === 'ready' ? chart.error : null}
+                watched={watched}
+                watchlistName={wl.active.name}
+                onToggleWatch={() => wl.toggle(symbol)}
+                extra={<GlanceToggle parts={glanceParts} open={prefs.glance} onToggle={() => update((p) => ({ glance: !p.glance }))} />}
+              />
+              {prefs.glance && <ChartSummary parts={glanceParts} />}
+            </>
+          )}
 
-          {chart.status === 'ready' && <ChartSummary candles={chart.candles} interval={interval} high52={quote?.high52} />}
 
           <div className="toolbar-row">
             {layout === 'single' ? <ChartToolbar period={period} interval={interval} onPeriod={setPeriod} onInterval={setInterval} /> : <div className="toolbar-hint">Each chart has its own period and interval. Move the crosshair on one to line up all three.</div>}
+          </div>
+
+          <div className="actions-row">
             <div className="tools">
-              <button className={`tool-btn trade-btn ${prefs.tradeOpen ? 'pressed' : ''}`} onClick={() => update((p) => ({ tradeOpen: !p.tradeOpen }))} aria-pressed={prefs.tradeOpen} title="Paper trade this stock with virtual money">
+              <button
+                className={`tool-btn trade-btn ${prefs.tradeOpen ? 'pressed' : ''} ${attention ? 'attention' : ''}`}
+                onClick={() => update((p) => ({ tradeOpen: !p.tradeOpen }))}
+                aria-pressed={prefs.tradeOpen}
+                title="Practise buying and selling this stock with virtual money"
+              >
                 <svg viewBox="0 0 20 20" aria-hidden>
                   <path d="M4 14l4-4 3 3 5-6M13 7h3v3" />
                 </svg>
-                Trade
+                {prefs.tradeOpen ? (
+                  'Close trade'
+                ) : (
+                  <>
+                    <span className="label-long">Paper trade</span>
+                    <span className="label-short">Trade</span>
+                  </>
+                )}
               </button>
               <OverlayMenu active={overlays} intraday={intraday} barCount={chart.candles.length} onToggle={toggleOverlay} onClear={() => update({ overlays: [] })} />
               {layout === 'single' && (
-                <button className="tool-btn" onClick={() => setSearch('compare')} disabled={prefs.compare.length >= MAX_COMPARE} title={prefs.compare.length >= MAX_COMPARE ? `Up to ${MAX_COMPARE} comparisons` : 'Overlay other stocks as % change'}>
+                <button className="tool-btn" aria-label="Compare with other stocks" onClick={() => setSearch('compare')} disabled={prefs.compare.length >= MAX_COMPARE} title={prefs.compare.length >= MAX_COMPARE ? `Up to ${MAX_COMPARE} comparisons` : 'Overlay other stocks as % change'}>
                   <svg viewBox="0 0 20 20" aria-hidden>
                     <path d="M3 14l4-5 3 3 6-7M3 17h14" />
                   </svg>
-                  Compare
+                  <span className="btn-label">Compare</span>
                 </button>
               )}
-              <div className="segmented" role="radiogroup" aria-label="Layout">
+              <div className="segmented layout-toggle" role="radiogroup" aria-label="Layout">
                 <button role="radio" aria-checked={layout === 'single'} className={layout === 'single' ? 'active' : ''} onClick={() => update({ layout: 'single' })} title="One chart">
                   <svg viewBox="0 0 20 20" aria-hidden>
                     <rect x="3" y="4" width="14" height="12" rx="1.5" />
@@ -545,6 +619,43 @@ export function App() {
                 </button>
               </div>
             </div>
+            {layout === 'single' && chart.status !== 'error' && (
+              <ChartActions
+                tool={tool}
+                onTool={(t) => {
+                  setTool(t);
+                  setSelectedId(null);
+                }}
+                hasSelection={!!selectedId}
+                drawingCount={draw.drawings.length}
+                canUndo={draw.canUndo}
+                canRedo={draw.canRedo}
+                onUndo={draw.undo}
+                onRedo={draw.redo}
+                onDelete={() => {
+                  if (selectedId) draw.remove(selectedId);
+                  setSelectedId(null);
+                }}
+                onClear={() => {
+                  draw.clear();
+                  setSelectedId(null);
+                }}
+                onDownload={onDownload}
+                onCopyImage={onCopyImage}
+                onShare={onShare}
+              />
+            )}
+            <button
+              className={`tool-btn focus-btn ${focusMode ? 'pressed' : ''}`}
+              onClick={() => setFocus((f) => !f)}
+              aria-pressed={focusMode}
+              aria-label={focusMode ? 'Exit full-screen chart' : 'Maximize chart'}
+              title={focusMode ? 'Exit full-screen chart (Esc or F)' : 'Maximize chart (F)'}
+            >
+              <svg viewBox="0 0 20 20" aria-hidden>
+                {focusMode ? <path d="M8 3v5H3M12 3v5h5M8 17v-5H3M12 17v-5h5" /> : <path d="M3 8V3h5M17 8V3h-5M3 12v5h5M17 12v5h-5" />}
+              </svg>
+            </button>
           </div>
 
           {(overlays.size > 0 || (layout === 'single' && prefs.compare.length > 0)) && (
@@ -573,37 +684,10 @@ export function App() {
             </div>
           )}
 
-          {layout === 'single' && chart.status !== 'error' && (
-            <ChartActions
-              tool={tool}
-              onTool={(t) => {
-                setTool(t);
-                setSelectedId(null);
-              }}
-              hasSelection={!!selectedId}
-              drawingCount={draw.drawings.length}
-              canUndo={draw.canUndo}
-              canRedo={draw.canRedo}
-              onUndo={draw.undo}
-              onRedo={draw.redo}
-              onDelete={() => {
-                if (selectedId) draw.remove(selectedId);
-                setSelectedId(null);
-              }}
-              onClear={() => {
-                draw.clear();
-                setSelectedId(null);
-              }}
-              onDownload={onDownload}
-              onCopyImage={onCopyImage}
-              onShare={onShare}
-            />
-          )}
-
           {layout === 'multi' ? (
             <MultiTimeframe symbol={symbol} frames={prefs.frames} overlays={overlays} onFramesChange={(frames) => update({ frames })} />
           ) : (
-            <section className="chart-panel" aria-label="Price chart">
+            <section className="chart-panel" aria-label="Price chart" ref={chartPanel}>
               {chart.status === 'error' ? (
                 <div className="chart-message">
                   {chart.notFound ? (
@@ -656,7 +740,7 @@ export function App() {
             </section>
           )}
 
-          {layout === 'single' && (
+          {layout === 'single' && !focusMode && (
             <SimilarStocks
               peers={peers}
               basis={peerBasis}
@@ -691,9 +775,11 @@ export function App() {
         </div>
       )}
 
-      <footer className="footer">
-        Prices refresh every 30 seconds and may be delayed by the exchange. Nothing on this site is investment advice. Data: Yahoo Finance (unofficial). Chart times are exchange time.
-      </footer>
+      {!focusMode && (
+        <footer className="footer">
+          Prices refresh every 30 seconds and may be delayed by the exchange. Nothing on this site is investment advice. Data: Yahoo Finance (unofficial). Chart times are exchange time.
+        </footer>
+      )}
 
       {sheetOpen && (
         <div className="sheet-backdrop" onMouseDown={() => setSheetOpen(false)}>
@@ -701,6 +787,17 @@ export function App() {
             {panel(() => setSheetOpen(false))}
           </div>
         </div>
+      )}
+
+      {welcome && (
+        <Welcome
+          searchKey={`${isMac ? '⌘' : 'Ctrl'} K`}
+          onClose={closeWelcome}
+          onGo={(view) => {
+            closeWelcome();
+            update({ view });
+          }}
+        />
       )}
 
       <SearchPalette open={search != null} actions={actions} mode={search ?? 'chart'} context={search === 'watchlist' ? wl.active.name : undefined} onClose={() => setSearch(null)} onSelect={onSearchSelect} />
