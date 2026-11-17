@@ -271,6 +271,7 @@ export function App() {
     },
     watchlist: { name: wl.active.name, symbols: wl.active.symbols, toggle: wl.toggle },
     maxCompare: MAX_COMPARE,
+    portfolio: { state: paper.state, prices: paper.prices, quotes },
   });
   const chat = useChat(chatTools.execute, chatTools.system);
 
@@ -585,7 +586,18 @@ export function App() {
           </main>
         ) : prefs.view === 'portfolio' ? (
           <main className="workspace">
-            <Portfolio market={prefs.portfolioMarket} onMarket={(m) => update({ portfolioMarket: m })} paper={paper} quotes={quotes} onOpen={selectSymbol} onToast={setToast} />
+            <Portfolio
+              market={prefs.portfolioMarket}
+              onMarket={(m) => update({ portfolioMarket: m })}
+              paper={paper}
+              quotes={quotes}
+              onOpen={selectSymbol}
+              onToast={setToast}
+              onAnalyse={(m) => {
+                update({ tradeOpen: true, sideTab: 'chat' });
+                if (chat.hasKey && !chat.busy) chat.send(`Analyse my ${m === 'IN' ? 'India (₹)' : 'US ($)'} paper portfolio: what's doing well and what isn't?`);
+              }}
+            />
           </main>
         ) : (
         <main className="workspace">

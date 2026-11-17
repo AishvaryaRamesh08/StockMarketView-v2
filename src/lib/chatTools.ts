@@ -68,6 +68,12 @@ export const TOOLS: FunctionDeclaration[] = [
     parameters: { type: 'object', properties: { market: { type: 'string', enum: ['IN', 'US'] } }, required: ['market'] },
   },
   {
+    name: 'get_portfolio',
+    description:
+      "Read the visitor's simulated paper-trading portfolio: holdings with average cost, latest price, value, weight, sector, unrealised P&L and today's move; cash; realised P&L by stock; win rate; recent trades. Use it to describe how their existing positions are doing.",
+    parameters: { type: 'object', properties: { market: { type: 'string', enum: ['IN', 'US', 'both'], description: 'Which wallet: IN (rupees), US (dollars) or both. Default: both.' } } },
+  },
+  {
     name: 'add_to_watchlist',
     description: "Add a stock to the visitor's current watchlist.",
     parameters: { type: 'object', properties: { ticker: TICKER }, required: ['ticker'] },
@@ -197,6 +203,12 @@ Hard rules:
 - Only state prices and numbers that come from your tools in this conversation; do not invent data. Prices may be delayed.
 - Answer only about markets, investing education and this website. Politely decline anything else.
 
+Portfolio reviews (the visitor's simulated paper-trading account):
+- When asked about "my portfolio", "my holdings" or how their trades are doing, call get_portfolio first, then summarise only what it returns.
+- Structure: one line on the overall picture (account value, total return, realised vs unrealised P&L), then short bullets on what is doing well (biggest gains in money and %), what is not (biggest losses), concentration (largest holdings by weight, sector weights, cash share), today's movers among holdings, and realised results (win rate, best and worst sale). End with one neutral sentence on what the numbers mean.
+- Describe and explain; do not advise. Never say to buy, sell, hold, add, trim, rebalance, cut losses or take profits, and do not rank holdings as things to keep or drop. Stating facts such as "TCS is 45% of the account" or "most of the gain comes from one stock" is fine.
+- Mention that it is a simulated account and that prices may be delayed. If some holdings have no price yet, say so.
+
 How to use the tools:
 - Map requests like "show Reliance for a year with RSI" to show_chart (ticker "Reliance", period "1y") then add_overlay ("rsi"). Do every step needed in one go.
 - To compare stocks, first call show_chart for the main stock (the first one named) unless it is already on screen, then call compare with the others. Never compare from a different stock than the one asked about.
@@ -204,7 +216,7 @@ How to use the tools:
 - If a tool reports that a ticker wasn't found or a range was adjusted, tell the visitor briefly.
 - After acting, say in one short sentence what you changed.
 
-Website features you can mention: Markets page (indices, top gainers and losers, latest market news headlines with links, today's patterns), Chart page (indicators, candlestick patterns, key levels, drawing tools, image export, share links, compare, multi-timeframe), watchlists (star), paper trading with ₹10 lakh / $100,000 virtual money and a Portfolio page.
+Website features you can mention: Markets page (indices, top gainers and losers, latest market news headlines with links, today's patterns), Chart page (indicators, candlestick patterns, key levels, drawing tools, image export, share links, compare, multi-timeframe), watchlists (star), paper trading with ₹10 lakh / $100,000 virtual money and a Portfolio page (holdings, P&L by stock and by day, win rate, order history). You can review the visitor's paper portfolio with get_portfolio.
 
 Current screen: ${c.view === 'chart' ? `chart of ${c.name ? `${c.name} (${c.symbol})` : c.symbol}, period ${c.period}, interval ${c.interval}, layout ${c.layout}` : `${c.view} page (last chart: ${c.symbol})`}. Overlays on: ${c.overlays.join(', ') || 'none'}.${c.compare.length ? ` Comparing with: ${c.compare.join(', ')}.` : ''} India market: ${c.marketState.IN}. US market: ${c.marketState.US}.
 

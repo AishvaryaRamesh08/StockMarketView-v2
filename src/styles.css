@@ -2920,14 +2920,14 @@ button.pt-row:hover {
     animation: sheet-up 0.18s ease-out;
   }
 
-  .pt-row {
+  .pt-row:not(.orders):not(.history):not(.trades-row):not(.days-row) {
     grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
   }
 
-  .pt-row > :nth-child(3),
-  .pt-row > :nth-child(4),
-  .pt-row > :nth-child(5),
-  .pt-row > :nth-child(7) {
+  .pt-row:not(.orders):not(.history):not(.trades-row):not(.days-row) > :nth-child(3),
+  .pt-row:not(.orders):not(.history):not(.trades-row):not(.days-row) > :nth-child(4),
+  .pt-row:not(.orders):not(.history):not(.trades-row):not(.days-row) > :nth-child(5),
+  .pt-row:not(.orders):not(.history):not(.trades-row):not(.days-row) > :nth-child(7) {
     display: none;
   }
 
@@ -2945,19 +2945,6 @@ button.pt-row:hover {
     display: inline-block;
   }
 
-  .pt-row.history {
-    grid-template-columns: minmax(0, 1fr) 60px 60px;
-  }
-
-  .pt-row.history > :nth-child(1),
-  .pt-row.history > :nth-child(4) {
-    display: none;
-  }
-
-  .pt-row.history > :nth-child(5),
-  .pt-row.history > :nth-child(6) {
-    display: block;
-  }
 }
 
 .crash {
@@ -4249,4 +4236,190 @@ button.pt-row:hover {
   align-self: flex-start;
   margin: 2px 16px 10px;
   font-size: 13px;
+}
+
+/* ================================================================ Portfolio: P&L breakdowns and trades */
+.pt-row.history {
+  grid-template-columns: 120px 90px 64px 80px 100px 120px minmax(0, 1fr);
+}
+
+.pf-card.clickable {
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+
+.pf-card.clickable:hover,
+.pf-card.clickable.open {
+  border-color: var(--accent);
+}
+
+.pf-card.clickable.open {
+  background: var(--accent-soft);
+}
+
+.pf-card-more {
+  font-size: 11.5px !important;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.pnl-breakdown .card-head {
+  align-items: flex-start;
+}
+
+.pnl-breakdown .card-sub b {
+  font-weight: 650;
+}
+
+.bd-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.bd-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 170px);
+  align-items: center;
+  gap: 14px;
+  padding: 8px 6px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bd-row:hover {
+  background: var(--surface-2);
+}
+
+.bd-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.bd-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--text-3);
+}
+
+.bd-fill.up {
+  background: var(--up);
+}
+
+.bd-fill.down {
+  background: var(--down);
+}
+
+.bd-val {
+  text-align: right;
+  font-weight: 600;
+}
+
+.bd-pct {
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.trades-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.trade-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.trade-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  min-width: 0;
+}
+
+.trade-stats b {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.best-worst {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pt-row.trades-row {
+  grid-template-columns: minmax(0, 1.6fr) 60px minmax(0, 1fr) 60px minmax(0, 1fr) minmax(0, 1.3fr);
+}
+
+.pt-row.days-row {
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
+}
+
+.day-syms {
+  font-size: 12.5px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@container workspace (max-width: 900px) {
+  .trade-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pt-row.trades-row {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr);
+  }
+
+  .pt-row.trades-row > :nth-child(2),
+  .pt-row.trades-row > :nth-child(4) {
+    display: none;
+  }
+
+  .pt-row.days-row {
+    grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(0, 1fr));
+  }
+
+  .pt-row.days-row > :nth-child(2) {
+    display: none;
+  }
+
+  .pt-row.history {
+    grid-template-columns: 90px minmax(0, 1fr) 56px minmax(0, 1fr);
+  }
+
+  .pt-row.history > :nth-child(4),
+  .pt-row.history > :nth-child(5),
+  .pt-row.history > :nth-child(7) {
+    display: none;
+  }
+
+  .bd-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.7fr) auto;
+  }
+}
+
+.analyse-btn {
+  margin-left: auto;
 }

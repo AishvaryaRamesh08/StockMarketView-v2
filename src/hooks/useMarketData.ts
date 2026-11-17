@@ -65,15 +65,21 @@ export function usePatternFeed(market: MarketId, enabled: boolean): { feed: Patt
 const universeCache = new Map<MarketId, Promise<UniverseEntry[]>>();
 
 /** NIFTY 500 or S&P 500 constituents with sectors, loaded once per page. */
+/** The index constituents (name, sector, market cap), fetched once per visit. */
+export function loadUniverse(market: MarketId): Promise<UniverseEntry[]> {
+  let p = universeCache.get(market);
+  if (!p) {
+    p = getJson<{ stocks: UniverseEntry[] }>(`/api/universe?market=${market}`).then((r) => r.stocks);
+    p.catch(() => universeCache.delete(market));
+    universeCache.set(market, p);
+  }
+  return p;
+}
+
 export function useUniverse(market: MarketId): UniverseEntry[] | null {
   const [list, setList] = useState<{ market: MarketId; stocks: UniverseEntry[] } | null>(null);
   useEffect(() => {
-    let p = universeCache.get(market);
-    if (!p) {
-      p = getJson<{ stocks: UniverseEntry[] }>(`/api/universe?market=${market}`).then((r) => r.stocks);
-      p.catch(() => universeCache.delete(market));
-      universeCache.set(market, p);
-    }
+    const p = loadUniverse(market);
     let live = true;
     p.then((stocks) => live && setList({ market, stocks })).catch(() => {});
     return () => {

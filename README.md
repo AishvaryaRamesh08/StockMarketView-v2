@@ -51,11 +51,16 @@ added when the build is complete.
   orders, long-only and whole shares. Market orders placed while a market is closed fill at the first price after
   the open. Fills, working orders and average cost are drawn on the chart. A Portfolio page shows account value,
   cash, holdings, realised and unrealised P&L, an equity curve and full order history, with JSON export/import and
-  reset. Orders are only checked while the site is open in a tab; fills ignore slippage, fees, dividends and splits.
+  reset. Click either P&L card to see which stocks made or lost money. **Trades & P&L** shows, for today, the last
+  7 or 30 days or all time, what was invested, what sales brought in and the realised P&L, by stock or by day
+  (in the exchange's own calendar), plus win rate and best/worst sale. Order history shows each sale's P&L. Orders are only checked while the site is open in a tab; fills ignore slippage, fees, dividends and splits.
 - **Ask AI** (Gemini, bring your own key): type or say “show Reliance for a year with RSI”, “compare TCS with
   Infosys” or “what is a demat account?”. It drives the site through function calling (open charts, add or remove
   indicators, compare, multi-timeframe, quotes, chart summaries, Markets page, watchlist) and answers beginner
-  questions carried over from the v1 Rasa bot. It never gives buy/sell recommendations and cannot place trades.
+  questions carried over from the v1 Rasa bot. It can also review the paper portfolio ("how is my portfolio doing?", or
+  **Analyse with AI** on the Portfolio page): overall return, what is up and down, concentration by stock and sector,
+  today's movers and realised results, described from the account's own numbers. It never gives buy/sell
+  recommendations and cannot place trades.
   The key is stored only in the visitor's browser and sent only to Google (in a request header, never a URL); it
   never reaches this site's Worker. The model is a setting (default `gemini-3.5-flash-lite`, the fastest); if it is overloaded, slow or out of
   quota the chat falls back to another Gemini model and says so. Voice input uses the

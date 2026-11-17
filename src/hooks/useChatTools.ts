@@ -9,6 +9,9 @@ import { loadSymbols, type SymbolEntry } from '../lib/search.ts';
 import { summarize } from '../lib/summary.ts';
 import type { MarketId, Quote } from '../lib/types.ts';
 import type { Frame } from '../components/MultiTimeframe.tsx';
+import type { PaperState } from '../lib/paper.ts';
+import { portfolioSnapshot } from '../lib/paperStats.ts';
+import { loadUniverse } from './useMarketData.ts';
 
 /** The part of the page state the chatbot reads and changes. */
 export interface ChatPrefs {
@@ -28,6 +31,8 @@ interface Deps {
   selectSymbol: (s: string) => void;
   watchlist: { name: string; symbols: string[]; toggle: (s: string) => void };
   maxCompare: number;
+  /** The paper account, read only when the visitor asks Ask AI about it. */
+  portfolio: { state: PaperState; prices: Record<string, number | undefined>; quotes: Record<string, Quote> };
 }
 
 const periodLabel = (p: PeriodId) => PERIODS.find((x) => x.id === p)!.label;
@@ -162,6 +167,25 @@ export function useChatTools(deps: Deps) {
         const m: MarketId = a.market === 'IN' ? 'IN' : 'US';
         apply({ view: 'markets', pulseMarket: m });
         return { result: { ok: true, market: m }, note: `Opened ${m === 'IN' ? 'India' : 'US'} markets` };
+      }
+      case 'get_portfolio': {
+        const { state, prices, quotes } = ref.current.portfolio;
+        const active = (m: MarketId) => state.positions.some((x) => x.market === m) || state.orders.some((o) => o.market === m);
+        const markets: MarketId[] = a.market === 'IN' || a.market === 'US' ? [a.market] : (['IN', 'US'] as MarketId[]).filter(active);
+        if (!markets.length) return { result: { empty: true, note: 'No paper trades yet. The visitor can start with the Paper trade button on any chart.' }, note: 'Read your portfolio' };
+        const wallets = await Promise.all(
+          markets.map(async (m) => {
+            const uni = await loadUniverse(m).catch(() => []);
+            const sector = new Map(uni.map((e) => [e.s, e.sec]));
+            const info: Record<string, { name?: string; sector?: string; changePct?: number | null }> = {};
+            for (const x of state.positions.filter((x) => x.market === m)) {
+              const q = quotes[x.symbol];
+              info[x.symbol] = { name: q?.name, sector: sector.get(x.symbol.replace(/\.BO$/, '.NS')), changePct: q?.changePct ?? null };
+            }
+            return portfolioSnapshot(state, m, prices, info);
+          }),
+        );
+        return { result: { wallets }, note: `Read your ${markets.map((m) => (m === 'IN' ? 'India' : 'US')).join(' and ')} portfolio` };
       }
       case 'add_to_watchlist': {
         const e = await resolve(a.ticker);

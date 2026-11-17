@@ -6,7 +6,8 @@ import { formatPct, formatPrice } from '../lib/format.ts';
 import { CURRENCY, DEFAULT_BUDGET, openOrders, summarize, type EquityPoint } from '../lib/paper.ts';
 import { cssVar, useAppearanceKey } from '../lib/theme.ts';
 import type { MarketId, Quote } from '../lib/types.ts';
-import { InfoTip } from './InfoTip.tsx';
+import { PnlBreakdown, TradesSection } from './PortfolioTrades.tsx';
+import { fillsOf, realizedByStock, unrealizedByStock } from '../lib/paperStats.ts';
 
 interface Props {
   market: MarketId;
@@ -15,6 +16,8 @@ interface Props {
   quotes: Record<string, Quote>;
   onOpen: (symbol: string) => void;
   onToast: (message: string) => void;
+  /** Opens Ask AI and asks it to review this wallet. */
+  onAnalyse: (market: MarketId) => void;
 }
 
 const ticker = (s: string) => s.replace(/\.(NS|BO)$/, '');
@@ -48,7 +51,7 @@ function EquityChart({ points, start, currency }: { points: EquityPoint[]; start
 }
 
 /** The paper-trading account for one market: totals, equity curve, holdings, orders, history. */
-export function Portfolio({ market, onMarket, paper, quotes, onOpen, onToast }: Props) {
+export function Portfolio({ market, onMarket, paper, quotes, onOpen, onToast, onAnalyse }: Props) {
   const s = paper.state;
   const currency = CURRENCY[market];
   const money = (v: number | null | undefined, digits = 2) => formatPrice(v, currency, digits);
@@ -58,6 +61,10 @@ export function Portfolio({ market, onMarket, paper, quotes, onOpen, onToast }: 
   const working = openOrders(s).filter((o) => o.market === market);
   const history = useMemo(() => s.orders.filter((o) => o.market === market && o.status !== 'open').sort((a, b) => (b.filledAt ?? 0) - (a.filledAt ?? 0)), [s.orders, market]);
   const [showAll, setShowAll] = useState(false);
+  const fills = useMemo(() => fillsOf(s, market), [s, market]);
+  const saleById = useMemo(() => new Map(fills.filter((f) => f.side === 'sell').map((f) => [f.id, f])), [fills]);
+  const [breakdown, setBreakdown] = useState<'realized' | 'unrealized' | null>(null);
+  const toggleBreakdown = (k: 'realized' | 'unrealized') => setBreakdown((b) => (b === k ? null : k));
 
   const [budget, setBudget] = useState({ IN: String(s.wallets.IN.start), US: String(s.wallets.US.start) });
   const [confirmReset, setConfirmReset] = useState(false);
@@ -103,6 +110,14 @@ export function Portfolio({ market, onMarket, paper, quotes, onOpen, onToast }: 
           </div>
           <span className="badge subtle">Simulated</span>
         </div>
+        {(positions.length > 0 || history.length > 0) && (
+          <button className="ask-ai-btn analyse-btn" onClick={() => onAnalyse(market)} title="Ask AI to summarise what's doing well and what isn't. It describes; it doesn't recommend trades.">
+            <svg viewBox="0 0 20 20" aria-hidden>
+              <path d="M10 2.5l1.6 4.4 4.4 1.6-4.4 1.6L10 14.5l-1.6-4.4L4 8.5l4.4-1.6zM15.5 13l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />
+            </svg>
+            <span>Analyse with AI</span>
+          </button>
+        )}
       </header>
 
       <div className="pf-cards">
@@ -121,23 +136,27 @@ export function Portfolio({ market, onMarket, paper, quotes, onOpen, onToast }: 
           <span className="pf-card-label">Holdings</span>
           <b className="num">{money(sum.holdingsValue)}</b>
         </div>
-        <div className="pf-card">
-          <InfoTip text="Profit or loss on shares you still hold, at the latest price.">
-            <span className="pf-card-label help" tabIndex={0}>
-              Unrealised P&amp;L
-            </span>
-          </InfoTip>
+        <button className={`pf-card clickable ${breakdown === 'unrealized' ? 'open' : ''}`} onClick={() => toggleBreakdown('unrealized')} aria-expanded={breakdown === 'unrealized'} title="Profit or loss on shares you still hold. Click to see it by holding.">
+          <span className="pf-card-label">Unrealised P&amp;L</span>
           <b className={`num ${sum.unrealized >= 0 ? 'up' : 'down'}`}>{signed(sum.unrealized)}</b>
-        </div>
-        <div className="pf-card">
-          <InfoTip text="Profit or loss locked in by selling.">
-            <span className="pf-card-label help" tabIndex={0}>
-              Realised P&amp;L
-            </span>
-          </InfoTip>
+          <span className="pf-card-more">By holding ›</span>
+        </button>
+        <button className={`pf-card clickable ${breakdown === 'realized' ? 'open' : ''}`} onClick={() => toggleBreakdown('realized')} aria-expanded={breakdown === 'realized'} title="Profit or loss locked in by selling. Click to see it by stock.">
+          <span className="pf-card-label">Realised P&amp;L</span>
           <b className={`num ${sum.realized >= 0 ? 'up' : 'down'}`}>{signed(sum.realized)}</b>
-        </div>
+          <span className="pf-card-more">By stock ›</span>
+        </button>
       </div>
+      {breakdown && (
+        <PnlBreakdown
+          kind={breakdown}
+          rows={breakdown === 'realized' ? realizedByStock(fills) : unrealizedByStock(positions, paper.prices)}
+          currency={currency}
+          quotes={quotes}
+          onOpen={onOpen}
+          onClose={() => setBreakdown(null)}
+        />
+      )}
       {sum.priceMissing && <p className="card-sub">Some holdings have no current price yet and are valued at cost.</p>}
 
       <section className="card">
@@ -192,6 +211,8 @@ export function Portfolio({ market, onMarket, paper, quotes, onOpen, onToast }: 
         )}
       </section>
 
+      <TradesSection fills={fills} market={market} currency={currency} quotes={quotes} onOpen={onOpen} />
+
       {working.length > 0 && (
         <section className="card">
           <div className="card-head">
@@ -227,6 +248,15 @@ export function Portfolio({ market, onMarket, paper, quotes, onOpen, onToast }: 
           <p className="empty-note">No filled or cancelled orders yet.</p>
         ) : (
           <div className="pt-table">
+            <div className="pt-row history pt-head">
+              <span>When</span>
+              <span>Stock</span>
+              <span>Side</span>
+              <span>Qty</span>
+              <span className="num-col">Price</span>
+              <span className="num-col">Cost / P&amp;L</span>
+              <span>Status</span>
+            </div>
             {(showAll ? history : history.slice(0, 15)).map((o) => (
               <div key={o.id} className="pt-row history">
                 <span className="card-sub">{new Date(o.filledAt ?? o.createdAt).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</span>
@@ -236,6 +266,9 @@ export function Portfolio({ market, onMarket, paper, quotes, onOpen, onToast }: 
                   {o.qty} {o.type}
                 </span>
                 <span className="num num-col">{o.fillPrice != null ? money(o.fillPrice) : '—'}</span>
+                <span className={`num num-col ${(saleById.get(o.id)?.realized ?? 0) >= 0 ? 'up' : 'down'}`} title={saleById.has(o.id) ? 'Profit or loss on this sale against your average cost' : undefined}>
+                  {saleById.has(o.id) ? signed(saleById.get(o.id)!.realized!) : o.status === 'filled' && o.fillPrice != null ? <span className="card-sub">{money(o.fillPrice * o.qty)}</span> : ''}
+                </span>
                 <span className={`hist-status ${o.status}`} title={o.note}>
                   {o.status === 'filled' ? 'Filled' : o.status === 'cancelled' ? 'Cancelled' : `Rejected: ${o.note ?? ''}`}
                 </span>

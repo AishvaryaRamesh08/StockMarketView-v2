@@ -13,7 +13,7 @@ const entries = [
 
 describe('tool declarations', () => {
   it('cover every tool in the spec', () => {
-    expect(TOOLS.map((t) => t.name).sort()).toEqual(['add_overlay', 'add_to_watchlist', 'compare', 'get_chart_summary', 'get_quote', 'open_markets', 'remove_overlay', 'set_multi_timeframe', 'show_chart'].sort());
+    expect(TOOLS.map((t) => t.name).sort()).toEqual(['add_overlay', 'add_to_watchlist', 'compare', 'get_chart_summary', 'get_portfolio', 'get_quote', 'open_markets', 'remove_overlay', 'set_multi_timeframe', 'show_chart'].sort());
   });
   it('offer no way to place trades', () => {
     expect(TOOLS.some((t) => /trade|order|buy|sell/i.test(t.name))).toBe(false);
@@ -79,5 +79,9 @@ describe('system prompt', () => {
     expect(p).toMatch(/Wells Fargo \(WFC\)/);
     expect(p).toMatch(/demat/);
     expect(p).toMatch(/2026-11-17/);
+  });
+  it('lets the assistant describe the portfolio but not advise on it', () => {
+    expect(p).toMatch(/call get_portfolio first/);
+    expect(p).toMatch(/Never say to buy, sell, hold, add, trim, rebalance/);
   });
 });

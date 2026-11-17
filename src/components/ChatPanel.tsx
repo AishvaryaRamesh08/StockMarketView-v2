@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSpeech, type ChatApi } from '../hooks/useChat.ts';
 import { DEFAULT_MODEL, SUGGESTED_MODELS } from '../lib/gemini.ts';
 
-const SUGGESTIONS = ['Show Reliance for 1 year with RSI', 'Compare TCS with Infosys and Wipro', 'Explain this chart', 'What is a demat account?'];
+const SUGGESTIONS = ['Show Reliance for 1 year with RSI', 'Compare TCS with Infosys and Wipro', 'Explain this chart', 'How is my portfolio doing?', 'What is a demat account?'];
 
 /** Chat with Gemini using the visitor's own key; it drives the charts through tools. */
 export function ChatPanel({ chat }: { chat: ChatApi }) {
