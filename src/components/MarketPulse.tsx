@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useNow } from '../hooks/useNow.ts';
-import { usePatternFeed, usePulse } from '../hooks/useMarketData.ts';
-import { formatAgo, formatPct, formatPrice, formatVolume } from '../lib/format.ts';
+import { useNews, usePatternFeed, usePulse } from '../hooks/useMarketData.ts';
+import { formatAgo, formatPct, formatPrice } from '../lib/format.ts';
 import type { PulseStock } from '../lib/marketData.ts';
 import type { PatternId } from '../lib/patterns.ts';
 import { breadth, topMovers } from '../lib/pulse.ts';
 import type { MarketId } from '../lib/types.ts';
-import { Heatmap } from './Heatmap.tsx';
+import { buildMatchers, matchStocks } from '../lib/newsMatch.ts';
 import { InfoTip } from './InfoTip.tsx';
 import { MarketStatusPill } from './MarketStatusPills.tsx';
 import { PatternsFeed } from './PatternsFeed.tsx';
@@ -18,20 +18,21 @@ interface Props {
   onOpen: (symbol: string, pattern?: PatternId) => void;
 }
 
-type MoverTab = 'gainers' | 'losers' | 'active';
-const TAB_LABEL: Record<MoverTab, string> = { gainers: 'Top gainers', losers: 'Top losers', active: 'Most active' };
-
 /** The landing page: how the whole market is doing right now, before you search for anything. */
 export function MarketPulse({ market, onMarket, onOpen }: Props) {
   const { pulse, error, lastUpdated } = usePulse(market, true);
   const { feed, error: feedError } = usePatternFeed(market, true);
-  const [tab, setTab] = useState<MoverTab>('gainers');
+  const { news, error: newsError, lastUpdated: newsUpdated } = useNews(market, true);
   const now = useNow(1000);
   const currency = market === 'IN' ? 'INR' : 'USD';
   const index = market === 'IN' ? 'NIFTY 500' : 'S&P 500';
 
   const stocks = pulse?.stocks ?? [];
-  const movers = useMemo(() => topMovers(stocks), [stocks]);
+  const movers = useMemo(() => topMovers(stocks, 10), [stocks]);
+  const bySymbol = useMemo(() => new Map(stocks.map((s) => [s.s, s])), [stocks]);
+  const matchers = useMemo(() => buildMatchers(stocks), [stocks]);
+  const [allNews, setAllNews] = useState(false);
+  const sources = [...new Set((news?.items ?? []).map((i) => i.source))];
   const b = useMemo(() => breadth(stocks), [stocks]);
   const total = b.up + b.down + b.flat || 1;
 
@@ -42,7 +43,7 @@ export function MarketPulse({ market, onMarket, onOpen }: Props) {
           <b>{s.s.replace(/\.(NS|BO)$/, '')}</b>
           <span>{s.n}</span>
         </span>
-        <span className="num mover-price">{tab === 'active' ? formatVolume(s.t, currency) : formatPrice(s.p, currency, 2, false)}</span>
+        <span className="num mover-price">{formatPrice(s.p, currency, 2, false)}</span>
         <span className={`num chg-pill ${s.chg >= 0 ? 'up' : 'down'}`}>{formatPct(s.chg)}</span>
       </button>
     </li>
@@ -96,35 +97,71 @@ export function MarketPulse({ market, onMarket, onOpen }: Props) {
       </div>
 
       <div className="pulse-grid">
-        <section className="card heatmap-card" aria-labelledby="hm-title">
-          <div className="card-head">
-            <div>
-              <h2 id="hm-title">{index} heatmap</h2>
-              <p className="card-sub">Size is market cap, colour is today's change. Click a stock to open its chart.</p>
-            </div>
-            <div className="hm-legend" aria-hidden>
-              <span>−3%</span>
-              <span className="hm-scale" />
-              <span>+3%</span>
-            </div>
-          </div>
-          <Heatmap stocks={stocks} currency={currency} onOpen={onOpen} />
-        </section>
-
-        <section className="card movers" aria-label="Market movers">
-          <div className="tabs" role="tablist">
-            {(Object.keys(TAB_LABEL) as MoverTab[]).map((t) => (
-              <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
-                {TAB_LABEL[t]}
-              </button>
+        <div className="pulse-main">
+          <div className="movers-pair">
+            {(['gainers', 'losers'] as const).map((k) => (
+              <section key={k} className="card movers" aria-labelledby={`mv-${k}`}>
+                <div className="card-head">
+                  <h2 id={`mv-${k}`}>{k === 'gainers' ? 'Top gainers' : 'Top losers'}</h2>
+                  <span className="card-sub">{index} · today</span>
+                </div>
+                <ul className="mover-list">{stocks.length ? movers[k].map(moverRow) : Array.from({ length: 8 }, (_, i) => <li key={i} className="skeleton" style={{ height: 38, margin: '4px 0' }} />)}</ul>
+              </section>
             ))}
           </div>
-          {tab === 'active' && <p className="card-sub tab-note">Ranked by value traded today (price × volume).</p>}
-          <ul className="mover-list">{stocks.length ? movers[tab].map(moverRow) : Array.from({ length: 8 }, (_, i) => <li key={i} className="skeleton" style={{ height: 38, margin: '4px 0' }} />)}</ul>
-        </section>
-      </div>
+          <PatternsFeed feed={feed} error={feedError} currency={currency} onOpen={(s, p) => onOpen(s, p)} />
+        </div>
 
-      <PatternsFeed feed={feed} error={feedError} currency={currency} onOpen={(s, p) => onOpen(s, p)} />
+        <aside className="card news" aria-labelledby="news-title">
+          <div className="card-head">
+            <div>
+              <h2 id="news-title">Market news</h2>
+              <p className="card-sub">
+                {sources.length ? `From ${sources.join(' and ')}` : 'Latest headlines'}
+                {newsUpdated ? ` · updated ${formatAgo(now - newsUpdated)}, refreshes hourly` : ''}
+              </p>
+            </div>
+          </div>
+          {newsError && !news && <p className="empty-note">News didn't load: {newsError}</p>}
+          <ul className="news-list">
+            {news
+              ? news.items.slice(0, allNews ? undefined : 8).map((item) => {
+                  const related = matchStocks(`${item.title} ${item.summary}`, matchers);
+                  return (
+                    <li key={item.link} className="news-item">
+                      <a href={item.link} target="_blank" rel="noopener noreferrer" className="news-title">
+                        {item.title}
+                        <svg viewBox="0 0 12 12" aria-hidden>
+                          <path d="M4.5 2.5h5v5M9.5 2.5 3 9" />
+                        </svg>
+                      </a>
+                      {item.summary && <p className="news-summary">{item.summary}</p>}
+                      <div className="news-meta">
+                        <span>
+                          {item.source} · {formatAgo(now - item.time * 1000)}
+                        </span>
+                        {related.map((sym) => {
+                          const st = bySymbol.get(sym)!;
+                          return (
+                            <button key={sym} className={`news-chip ${st.chg >= 0 ? 'up' : 'down'}`} onClick={() => onOpen(sym)} title={`${st.n}: open chart`}>
+                              {sym.replace(/\.(NS|BO)$/, '')} <span className="num">{formatPct(st.chg)}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </li>
+                  );
+                })
+              : !newsError && Array.from({ length: 6 }, (_, i) => <li key={i} className="skeleton" style={{ height: 72, margin: '8px 0' }} />)}
+          </ul>
+          {news && news.items.length > 8 && (
+            <button className="link news-more" onClick={() => setAllNews((v) => !v)}>
+              {allNews ? 'Show fewer' : `Show ${news.items.length - 8} more headlines`}
+            </button>
+          )}
+          <p className="news-foot">Headlines open on the publisher's site. News is for context, not advice.</p>
+        </aside>
+      </div>
     </div>
   );
 }

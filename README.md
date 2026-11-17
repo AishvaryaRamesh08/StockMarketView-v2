@@ -32,8 +32,12 @@ added when the build is complete.
 - **Compare** up to 4 stocks or indices as % change.
 - **Multi-timeframe**: three charts of the same stock with synced crosshairs.
 - **Watchlists**: multiple named lists with live prices, sparklines and pattern badges.
-- **Markets page** (the landing page): India/US toggle, index cards, market breadth, a NIFTY 500 / S&P 500 heatmap
-  sized by market cap, and top gainers, losers and most active (by value traded), refreshed every minute.
+- **Markets page** (the landing page): India/US toggle, index cards, market breadth, and the NIFTY 500 / S&P 500
+  top gainers and losers, refreshed every 2 minutes while the market is open.
+- **Market news**: the latest headlines beside the movers, each with a short snippet and a link to the full
+  article on the publisher's site (nothing is copied or stored). India: The Economic Times and Mint; US: Yahoo
+  Finance. Headlines that name an index stock show it with today's move ("NVDA −0.96%"), one click from its chart.
+  Fetched from the publishers' RSS feeds at most once an hour per Cloudflare location.
 - **Patterns today**: every NIFTY 500 and S&P 500 stock scanned for candlestick patterns after each close,
   ranked by unusual volume, with RSI; one click opens the chart with the pattern marked.
 - **Similar stocks**: same-industry peers below the chart, with one-click compare.
@@ -83,10 +87,12 @@ Yahoo Finance chart + spark endpoints
 - **Polls only when useful:** every 30s while the stock's market is open, every 5 minutes when closed, and not at all while the tab is hidden.
 - **Search index** (`public/symbols.json`, 18.8k symbols, about 240 KB gzipped) loads only when search is first opened.
 - **No accounts or database.** Preferences are kept in the visitor's browser.
-- **Market-wide data**: `/api/pulse` prices all ~500 stocks of a market in 25 batched calls, cached for 60 seconds.
+- **Market-wide data**: `/api/pulse` prices all ~500 stocks of a market in 25 batched calls, cached for 2 minutes.
   Work that needs one request per stock runs in GitHub Actions instead (`.github/workflows/market-data.yml`):
   the pattern scan after each close and the constituent list weekly. Results are published as assets of the
   `data` release, which the API reads and caches.
+- **News**: `/api/news` reads the publishers' RSS feeds and caches the headlines for an hour, so each visitor costs one
+  request an hour for news. The movers snapshot is cached for 2 minutes and polled every 2 minutes.
 
 Prices are labelled "refreshed every 30s", never "real-time": Yahoo's feed is unofficial and some listings are exchange-delayed.
 

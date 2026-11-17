@@ -21,6 +21,7 @@ import {
   type YahooMeta,
   type YahooSparkResponse,
 } from './yahoo.ts';
+import { NEWS_FEEDS, mergeNews, parseRss, type NewsResponse } from './news.ts';
 import { DATA_BASE_URL, PULSE_INDICES, isMarketId, type PatternFeed, type Pulse, type PulseStock, type Universe } from '../src/lib/marketData.ts';
 
 const RANGES = ['1d', '5d', '1mo', '3mo', '6mo', 'ytd', '1y', '5y', '10y', 'max'] as const;
@@ -302,8 +303,8 @@ async function patternsRoute(params: URLSearchParams): Promise<Response> {
 
 /**
  * Live snapshot of a whole market: every NIFTY 500 / S&P 500 stock's price, change and volume,
- * plus the main indices. 25 batched calls of 20 symbols, cached for 60 seconds, so it costs
- * Yahoo at most 26 requests a minute per market however many people are watching.
+ * plus the main indices. 25 batched calls of 20 symbols, cached for 2 minutes, so it costs
+ * Yahoo at most 26 requests every 2 minutes per market however many people are watching.
  */
 async function pulseRoute(params: URLSearchParams): Promise<Response> {
   const market = params.get('market');
@@ -360,7 +361,26 @@ async function pulseRoute(params: URLSearchParams): Promise<Response> {
     }
   }
   if (stocks.length === 0) return fail(502, 'The data provider did not respond. Retrying shortly.');
-  return json({ market, asOf, indices, stocks } satisfies Pulse, 200, 60);
+  return json({ market, asOf, indices, stocks } satisfies Pulse, 200, 120);
+}
+
+/**
+ * Latest market headlines for India or the US from public RSS feeds, cached for an hour:
+ * one fetch per feed per hour per Cloudflare location, however many people read them.
+ */
+async function newsRoute(params: URLSearchParams): Promise<Response> {
+  const market = params.get('market');
+  if (!isMarketId(market)) return fail(400, 'market must be IN or US');
+  const results = await Promise.allSettled(
+    NEWS_FEEDS[market].map(async (f) => {
+      const res = await fetch(f.url, { headers: { 'User-Agent': UPSTREAM_HEADERS['User-Agent'], Accept: 'application/rss+xml, application/xml, text/xml' } });
+      if (!res.ok) throw new UpstreamError(res.status);
+      return parseRss(await res.text(), f.name);
+    }),
+  );
+  const lists = results.filter((r): r is PromiseFulfilledResult<ReturnType<typeof parseRss>> => r.status === 'fulfilled').map((r) => r.value);
+  if (!lists.length) return fail(502, "The news feeds didn't respond. Retrying later.");
+  return json({ market, items: mergeNews(lists) } satisfies NewsResponse, 200, 3600);
 }
 
 /* --------------------------------- router ---------------------------------- */
@@ -387,6 +407,7 @@ export async function handleApi(request: Request, waitUntil?: (p: Promise<unknow
     else if (route === 'pulse') res = await pulseRoute(url.searchParams);
     else if (route === 'patterns') res = await patternsRoute(url.searchParams);
     else if (route === 'universe') res = await universeRoute(url.searchParams);
+    else if (route === 'news') res = await newsRoute(url.searchParams);
     else res = fail(404, 'Unknown endpoint');
   } catch (err) {
     const status = err instanceof UpstreamError ? err.status : 0;

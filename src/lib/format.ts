@@ -63,7 +63,8 @@ export function formatAgo(ms: number): string {
   const m = Math.floor(s / 60);
   if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);
-  return `${h}h ago`;
+  if (h < 48) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
 }
 
 /** "3:30 PM" in the visitor's own time zone, plus the zone name when it differs from the exchange's. */

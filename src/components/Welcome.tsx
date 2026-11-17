@@ -10,7 +10,7 @@ const VIEWS = [
   {
     id: 'markets' as const,
     title: 'Markets',
-    text: "Today's big picture: indices, a heatmap of who's up and down, and stocks that formed a pattern today.",
+    text: "Today's big picture: indices, top gainers and losers, the latest market news, and stocks that formed a pattern today.",
     icon: <path d="M3 3h6v8H3zM11 3h6v5h-6zM11 10h6v7h-6zM3 13h6v4H3z" />,
   },
   {

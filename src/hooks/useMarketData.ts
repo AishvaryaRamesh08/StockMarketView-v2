@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { PatternFeed, Pulse, UniverseEntry } from '../lib/marketData.ts';
+import type { NewsResponse } from '../../server/news.ts';
 import { marketStatus } from '../lib/markets.ts';
 import type { MarketId } from '../lib/types.ts';
 import { usePolling } from './usePolling.ts';
@@ -15,7 +16,7 @@ async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   return body;
 }
 
-/** Live market snapshot, refreshed every minute while that market is open (10 minutes otherwise). */
+/** Live market snapshot, refreshed every 2 minutes while that market is open (10 minutes otherwise). */
 export function usePulse(market: MarketId, enabled: boolean): { pulse: Pulse | null; error: string | null; lastUpdated: number | null } {
   const [state, setState] = useState<{ market: MarketId; pulse: Pulse | null; error: string | null; lastUpdated: number | null }>({ market, pulse: null, error: null, lastUpdated: null });
 
@@ -41,7 +42,7 @@ export function usePulse(market: MarketId, enabled: boolean): { pulse: Pulse | n
 
   const now = useNow(60_000);
   const open = marketStatus(market, new Date(now)).state === 'open';
-  usePolling(load, open ? 60_000 : 10 * 60_000, enabled);
+  usePolling(load, open ? 2 * 60_000 : 10 * 60_000, enabled);
 
   return state.market === market ? state : { pulse: null, error: null, lastUpdated: null };
 }
@@ -80,4 +81,32 @@ export function useUniverse(market: MarketId): UniverseEntry[] | null {
     };
   }, [market]);
   return list?.market === market ? list.stocks : null;
+}
+
+/** Latest market headlines, refreshed hourly (the server caches them for an hour too). */
+export function useNews(market: MarketId, enabled: boolean): { news: NewsResponse | null; error: string | null; lastUpdated: number | null } {
+  const [state, setState] = useState<{ market: MarketId; news: NewsResponse | null; error: string | null; lastUpdated: number | null }>({ market, news: null, error: null, lastUpdated: null });
+
+  const load = useCallback(
+    async (signal: AbortSignal) => {
+      try {
+        const news = await getJson<NewsResponse>(`/api/news?market=${market}`, signal);
+        setState({ market, news, error: null, lastUpdated: Date.now() });
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
+        setState((s) => ({ ...s, market, error: (err as Error).message }));
+      }
+    },
+    [market],
+  );
+
+  useEffect(() => {
+    if (!enabled) return;
+    const c = new AbortController();
+    void load(c.signal);
+    return () => c.abort();
+  }, [load, enabled]);
+
+  usePolling(load, 60 * 60_000, enabled);
+  return state.market === market ? state : { news: null, error: null, lastUpdated: null };
 }

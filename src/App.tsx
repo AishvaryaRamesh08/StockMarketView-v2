@@ -387,7 +387,7 @@ export function App() {
   const appearance = useAppearance();
   const actions: PaletteAction[] = useMemo(
     () => [
-      { id: 'view-markets', label: 'Go to Markets', keywords: 'pulse heatmap movers home overview', run: () => update({ view: 'markets' }) },
+      { id: 'view-markets', label: 'Go to Markets', keywords: 'pulse movers gainers losers news headlines home overview', run: () => update({ view: 'markets' }) },
       { id: 'view-chart', label: 'Go to Chart', keywords: 'candles', run: () => update({ view: 'chart' }) },
       { id: 'view-portfolio', label: 'Go to Portfolio', keywords: 'paper trading holdings positions p&l account', run: () => update({ view: 'portfolio' }) },
       { id: 'help', label: 'What can this site do?', keywords: 'help about welcome guide tour features', run: () => setWelcome(true) },

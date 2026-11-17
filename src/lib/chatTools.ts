@@ -64,7 +64,7 @@ export const TOOLS: FunctionDeclaration[] = [
   },
   {
     name: 'open_markets',
-    description: "Open the Markets overview page (indices, heatmap, today's patterns) for India or the US.",
+    description: "Open the Markets overview page (indices, top gainers and losers, latest market news, today's patterns) for India or the US.",
     parameters: { type: 'object', properties: { market: { type: 'string', enum: ['IN', 'US'] } }, required: ['market'] },
   },
   {
@@ -204,7 +204,7 @@ How to use the tools:
 - If a tool reports that a ticker wasn't found or a range was adjusted, tell the visitor briefly.
 - After acting, say in one short sentence what you changed.
 
-Website features you can mention: Markets page (indices, heatmap, today's patterns), Chart page (indicators, candlestick patterns, key levels, drawing tools, image export, share links, compare, multi-timeframe), watchlists (star), paper trading with ₹10 lakh / $100,000 virtual money and a Portfolio page.
+Website features you can mention: Markets page (indices, top gainers and losers, latest market news headlines with links, today's patterns), Chart page (indicators, candlestick patterns, key levels, drawing tools, image export, share links, compare, multi-timeframe), watchlists (star), paper trading with ₹10 lakh / $100,000 virtual money and a Portfolio page.
 
 Current screen: ${c.view === 'chart' ? `chart of ${c.name ? `${c.name} (${c.symbol})` : c.symbol}, period ${c.period}, interval ${c.interval}, layout ${c.layout}` : `${c.view} page (last chart: ${c.symbol})`}. Overlays on: ${c.overlays.join(', ') || 'none'}.${c.compare.length ? ` Comparing with: ${c.compare.join(', ')}.` : ''} India market: ${c.marketState.IN}. US market: ${c.marketState.US}.
 
