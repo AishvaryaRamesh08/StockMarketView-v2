@@ -1,6 +1,6 @@
 /** Helpers for the data scripts: polite fetching with retries, and a small concurrency pool. */
 import type { Candle } from '../src/lib/types.ts';
-import { sessionFromIntraday } from '../src/lib/candles.ts';
+import { YAHOO_HOSTS, appendTodayCandle, parseCandles, yahooPath, type YahooChartResponse } from '../server/yahoo.ts';
 
 const UA = { 'User-Agent': 'Mozilla/5.0 (compatible; StockMarketView data job)', Accept: 'application/json,text/csv,*/*' };
 
@@ -74,44 +74,14 @@ export function parseCsv(text: string): Record<string, string>[] {
   });
 }
 
-interface YahooChart {
-  chart?: {
-    result?: Array<{
-      meta: { gmtoffset?: number; regularMarketTime?: number; regularMarketPrice?: number };
-      timestamp?: number[];
-      indicators: { quote: Array<{ open: (number | null)[]; high: (number | null)[]; low: (number | null)[]; close: (number | null)[]; volume: (number | null)[] }> };
-    }>;
-  };
-}
-
-/** Daily candles plus the exchange's UTC offset, skipping Yahoo's empty placeholder bars. */
+/** Daily candles (including today's, see server/yahoo.ts) plus the exchange's UTC offset. */
 export async function dailyCandles(symbol: string, range = '3mo'): Promise<{ candles: Candle[]; gmtoffset: number }> {
-  const data = (await get(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d`)) as YahooChart;
+  const data = (await get(YAHOO_HOSTS[0] + yahooPath.chart(symbol, range, '1d'))) as YahooChartResponse;
   const r = data.chart?.result?.[0];
   if (!r) return { candles: [], gmtoffset: 0 };
-  const candles = parse(r);
-  // Yahoo sends today's daily candle empty for NSE/BSE stocks: rebuild it from 5-minute bars.
-  const lastT = r.timestamp?.at(-1);
-  if (lastT != null && r.meta.regularMarketPrice != null && (candles.length === 0 || candles[candles.length - 1].t < lastT)) {
-    const intraday = (await get(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=5m`)) as YahooChart;
-    const ir = intraday.chart?.result?.[0];
-    const bar = ir ? sessionFromIntraday(lastT, parse(ir), r.meta.regularMarketPrice) : null;
-    if (bar) candles.push(bar);
-  }
+  const candles = parseCandles(r);
+  await appendTodayCandle(candles, r, async () => (await get(YAHOO_HOSTS[0] + yahooPath.chart(symbol, '1d', '5m'))) as YahooChartResponse);
   return { candles, gmtoffset: r.meta.gmtoffset ?? 0 };
-}
-
-type YahooResult = NonNullable<NonNullable<YahooChart['chart']>['result']>[number];
-
-function parse(r: YahooResult): Candle[] {
-  const q = r.indicators.quote[0];
-  const candles: Candle[] = [];
-  (r.timestamp ?? []).forEach((t, i) => {
-    const o = q.open[i], h = q.high[i], l = q.low[i], c = q.close[i];
-    if (o == null || h == null || l == null || c == null) return;
-    candles.push({ t, o, h, l, c, v: q.volume[i] ?? 0 });
-  });
-  return candles;
 }
 
 /** Exchange-local date of a timestamp, "YYYY-MM-DD". */

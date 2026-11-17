@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AppearanceMenu } from './components/AppearanceMenu.tsx';
 import { ChartSummary } from './components/ChartSummary.tsx';
 import { ChartToolbar } from './components/ChartToolbar.tsx';
 import { IndexStrip, STRIP_INDICES } from './components/IndexStrip.tsx';
@@ -9,7 +10,7 @@ import { DEFAULT_FRAMES, MultiTimeframe, type Frame } from './components/MultiTi
 import { ActiveOverlays, OverlayMenu } from './components/OverlayMenu.tsx';
 import { PriceChart } from './components/PriceChart.tsx';
 import { QuoteHeader } from './components/QuoteHeader.tsx';
-import { SearchPalette, rememberRecent, type SearchMode } from './components/SearchPalette.tsx';
+import { SearchPalette, rememberRecent, type PaletteAction, type SearchMode } from './components/SearchPalette.tsx';
 import { SimilarStocks } from './components/SimilarStocks.tsx';
 import { WatchlistPanel } from './components/WatchlistPanel.tsx';
 import { MAX_COMPARE, useCompare } from './hooks/useCompare.ts';
@@ -23,7 +24,8 @@ import { digitsFor } from './lib/format.ts';
 import { previousSession, supportResistance, type Level } from './lib/levels.ts';
 import { marketOf, sessionKeyFn } from './lib/markets.ts';
 import { isMarketId } from './lib/marketData.ts';
-import { DEFAULT_OVERLAYS, isOverlayId, type OverlayId } from './lib/overlays.ts';
+import { DEFAULT_OVERLAYS, OVERLAYS, isOverlayId, type OverlayId } from './lib/overlays.ts';
+import { setAppearance, useAppearance } from './lib/theme.ts';
 import type { PatternId } from './lib/patterns.ts';
 import { findPeers } from './lib/pulse.ts';
 import type { MarketId } from './lib/types.ts';
@@ -198,8 +200,42 @@ export function App() {
     document.title = quote?.price != null ? `${symbol.replace(/\.(NS|BO)$/, '')} ${quote.price.toFixed(2)} · StockMarketView` : 'StockMarketView';
   }, [symbol, quote?.price]);
 
-  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
   const watched = wl.active.symbols.includes(symbol);
+  const appearance = useAppearance();
+  const actions: PaletteAction[] = useMemo(
+    () => [
+      { id: 'view-markets', label: 'Go to Markets', keywords: 'pulse heatmap movers home overview', run: () => update({ view: 'markets' }) },
+      { id: 'view-chart', label: 'Go to Chart', keywords: 'candles', run: () => update({ view: 'chart' }) },
+      { id: 'market-in', label: 'Markets: show India', keywords: 'nifty nse', run: () => update({ view: 'markets', pulseMarket: 'IN' }) },
+      { id: 'market-us', label: 'Markets: show US', keywords: 's&p nasdaq nyse', run: () => update({ view: 'markets', pulseMarket: 'US' }) },
+      appearance.theme === 'dark'
+        ? { id: 'theme', label: 'Switch to light theme', keywords: 'appearance mode white', run: () => setAppearance({ theme: 'light' }) }
+        : { id: 'theme', label: 'Switch to dark theme', keywords: 'appearance mode black night', run: () => setAppearance({ theme: 'dark' }) },
+      appearance.palette === 'classic'
+        ? { id: 'palette', label: 'Use blue / orange colours (colour-blind friendly)', keywords: 'color blind accessibility palette', run: () => setAppearance({ palette: 'cb' }) }
+        : { id: 'palette', label: 'Use green / red colours', keywords: 'color palette classic', run: () => setAppearance({ palette: 'classic' }) },
+      prefs.layout === 'single'
+        ? { id: 'layout', label: 'Multi-timeframe view (three charts)', keywords: 'layout mtf split', run: () => update({ view: 'chart', layout: 'multi' }) }
+        : { id: 'layout', label: 'Single chart view', keywords: 'layout one', run: () => update({ view: 'chart', layout: 'single' }) },
+      { id: 'sidebar', label: prefs.sidebar ? 'Hide watchlist' : 'Show watchlist', keywords: 'sidebar panel', run: () => update((p) => ({ sidebar: !p.sidebar })) },
+      { id: 'compare', label: 'Compare with another stock…', keywords: 'overlay versus vs', run: () => setTimeout(() => setSearch('compare'), 0) },
+      { id: 'watch', label: watched ? `Remove ${symbol} from watchlist` : `Add ${symbol} to watchlist`, keywords: 'star save follow', run: () => wl.toggle(symbol) },
+      { id: 'clear', label: 'Remove all indicators', keywords: 'clear overlays reset', run: () => update({ overlays: [] }) },
+      ...OVERLAYS.map((o) => ({
+        id: `ov-${o.id}`,
+        label: `${prefs.overlays.includes(o.id) ? 'Hide' : 'Show'} ${o.label}`,
+        keywords: `${o.group} indicator pattern toggle add remove`,
+        run: () => {
+          toggleOverlay(o.id);
+          update({ view: 'chart' });
+        },
+      })),
+    ],
+    [appearance, prefs.layout, prefs.sidebar, prefs.overlays, symbol, watched, wl, update, toggleOverlay],
+  );
+
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+
   const panel = (onClose?: () => void) => (
     <WatchlistPanel wl={wl} quotes={quotes} patterns={badges} current={symbol} onSelect={selectSymbol} onAdd={() => setSearch('watchlist')} onClose={onClose} />
   );
@@ -246,6 +282,7 @@ export function App() {
         </button>
 
         <div className="topbar-status">
+          <AppearanceMenu />
           <MarketStatusPill market="IN" />
           <MarketStatusPill market="US" />
         </div>
@@ -409,7 +446,7 @@ export function App() {
         </div>
       )}
 
-      <SearchPalette open={search != null} mode={search ?? 'chart'} context={search === 'watchlist' ? wl.active.name : undefined} onClose={() => setSearch(null)} onSelect={onSearchSelect} />
+      <SearchPalette open={search != null} actions={actions} mode={search ?? 'chart'} context={search === 'watchlist' ? wl.active.name : undefined} onClose={() => setSearch(null)} onSelect={onSearchSelect} />
     </div>
   );
 }

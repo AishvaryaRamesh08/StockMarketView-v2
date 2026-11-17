@@ -7,6 +7,7 @@
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import type { Universe, UniverseEntry } from '../src/lib/marketData.ts';
+import { YAHOO_HOSTS, latestTimeseriesValue, searchClassification, yahooPath } from '../server/yahoo.ts';
 import { get, parseCsv, pool } from './lib.ts';
 
 const OUT = new URL('../data-out/', import.meta.url);
@@ -14,11 +15,7 @@ const OUT = new URL('../data-out/', import.meta.url);
 async function marketCap(symbol: string): Promise<number | undefined> {
   const now = Math.floor(Date.now() / 1000);
   try {
-    const data = (await get(
-      `https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(symbol)}?type=trailingMarketCap&period1=${now - 30 * 86400}&period2=${now}`,
-    )) as { timeseries?: { result?: Array<{ trailingMarketCap?: Array<{ reportedValue?: { raw?: number } }> }> } };
-    const points = data.timeseries?.result?.[0]?.trailingMarketCap ?? [];
-    return points.filter((p) => p?.reportedValue?.raw != null).at(-1)?.reportedValue?.raw;
+    return latestTimeseriesValue(await get(YAHOO_HOSTS[0] + yahooPath.timeseries(symbol, ['trailingMarketCap'], now - 30 * 86400, now)), 'trailingMarketCap');
   } catch {
     return undefined;
   }
@@ -26,11 +23,7 @@ async function marketCap(symbol: string): Promise<number | undefined> {
 
 async function yahooIndustry(symbol: string): Promise<string | undefined> {
   try {
-    const data = (await get(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(symbol)}&quotesCount=5&newsCount=0&listsCount=0`)) as {
-      quotes?: Array<{ symbol: string; industryDisp?: string; industry?: string }>;
-    };
-    const m = data.quotes?.find((q) => q.symbol.toUpperCase() === symbol.toUpperCase());
-    return m?.industryDisp ?? m?.industry;
+    return searchClassification(await get(YAHOO_HOSTS[1] + yahooPath.search(symbol)), symbol).industry;
   } catch {
     return undefined;
   }

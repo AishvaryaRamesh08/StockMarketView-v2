@@ -10,6 +10,7 @@ export function InfoTip({ text, children, className = '' }: { text: string; chil
   const ref = useRef<HTMLSpanElement>(null);
   const id = useId();
 
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const show = () => {
     const r = ref.current?.getBoundingClientRect();
     if (!r) return;
@@ -18,7 +19,14 @@ export function InfoTip({ text, children, className = '' }: { text: string; chil
   };
 
   return (
-    <span ref={ref} className={`infotip-anchor ${className}`} onMouseEnter={show} onMouseLeave={() => setPos(null)} onFocus={show} onBlur={() => setPos(null)} aria-describedby={pos ? id : undefined}>
+    <span ref={ref} className={`infotip-anchor ${className}`} onMouseEnter={show} onMouseLeave={() => setPos(null)} onFocus={show} onBlur={() => setPos(null)}
+      // Touch screens have no hover: a tap shows the tip for a few seconds.
+      onPointerDown={(e) => {
+        if (e.pointerType === 'mouse') return;
+        show();
+        clearTimeout(hideTimer.current);
+        hideTimer.current = setTimeout(() => setPos(null), 4500);
+      }} aria-describedby={pos ? id : undefined}>
       {children}
       {pos &&
         createPortal(

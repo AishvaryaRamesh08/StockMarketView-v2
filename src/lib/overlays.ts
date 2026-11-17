@@ -2,7 +2,7 @@
  * Everything a user can switch on above, on or below the chart, with the colours used to draw
  * it and a one-sentence beginner explanation shown on hover.
  */
-import type { PatternId } from './patterns.ts';
+import { PATTERN_BIAS, type PatternId } from './patterns.ts';
 
 export type IndicatorId = 'sma20' | 'sma50' | 'sma100' | 'sma200' | 'ema9' | 'ema21' | 'bb' | 'ichimoku' | 'psar' | 'vwap' | 'rsi' | 'macd';
 export type LevelId = 'lvl52w' | 'lvlPrev' | 'lvlSR';
@@ -62,6 +62,13 @@ export const OVERLAY_BY_ID = new Map(OVERLAYS.map((o) => [o.id, o]));
 export const DEFAULT_OVERLAYS: OverlayId[] = ['sma50', 'sma200', 'bullishEngulfing', 'bearishEngulfing', 'dividends'];
 
 export const PATTERN_IDS = OVERLAYS.filter((o) => o.group === 'Candlestick patterns').map((o) => o.id as PatternId);
+
+/** Menu/legend swatch: patterns follow the theme's up/down colours, indicators keep their own. */
+export function swatchColor(o: OverlayDef): string {
+  if (o.group !== 'Candlestick patterns') return o.color;
+  const bias = PATTERN_BIAS[o.id as PatternId];
+  return bias === 'bullish' ? 'var(--up)' : bias === 'bearish' ? 'var(--down)' : o.color;
+}
 
 export function isOverlayId(v: unknown): v is OverlayId {
   return typeof v === 'string' && OVERLAY_BY_ID.has(v as OverlayId);

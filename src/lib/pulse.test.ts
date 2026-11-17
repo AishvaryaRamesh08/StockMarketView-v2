@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { breadth, changeColor, findPeers, sectors, topMovers } from './pulse.ts';
+import { breadth, changeColor, findPeers, parseRgbTriple, sectors, topMovers } from './pulse.ts';
 import { squarify } from './treemap.ts';
 import type { PulseStock, UniverseEntry } from './marketData.ts';
 
@@ -59,6 +59,11 @@ describe('changeColor', () => {
     expect(changeColor(0)).toBe('rgb(52, 58, 72)');
     expect(changeColor(5)).toBe(changeColor(3));
     expect(changeColor(-5)).toBe(changeColor(-3));
+  });
+  it('uses a custom scheme, read from CSS variables', () => {
+    const scheme = { neutral: [0, 0, 0], up: parseRgbTriple(' 10, 20,30 ', [1, 1, 1]), down: [9, 9, 9] };
+    expect(changeColor(3, scheme)).toBe('rgb(10, 20, 30)');
+    expect(parseRgbTriple('nonsense', [1, 2, 3])).toEqual([1, 2, 3]);
   });
 });
 

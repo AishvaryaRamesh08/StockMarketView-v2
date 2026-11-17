@@ -89,6 +89,10 @@ describe('sessionFromIntraday', () => {
   it('widens high/low to include the last price', () => {
     expect(sessionFromIntraday(0, [{ t: 0, o: 10, h: 11, l: 9, c: 10, v: 1 }], 12)).toMatchObject({ h: 12, l: 9, c: 12 });
   });
+  it('prefers the day\'s reported volume over the intraday sum', () => {
+    expect(sessionFromIntraday(0, [{ t: 0, o: 10, h: 11, l: 9, c: 10, v: 100 }], 10, 180)?.v).toBe(180);
+    expect(sessionFromIntraday(0, [{ t: 0, o: 10, h: 11, l: 9, c: 10, v: 100 }], 10, 0)?.v).toBe(100);
+  });
   it('returns null without intraday data', () => {
     expect(sessionFromIntraday(0, [])).toBeNull();
   });

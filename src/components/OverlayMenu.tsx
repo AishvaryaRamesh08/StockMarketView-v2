@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { OVERLAYS, OVERLAY_BY_ID, type OverlayGroup, type OverlayId } from '../lib/overlays.ts';
+import { OVERLAYS, OVERLAY_BY_ID, swatchColor, type OverlayGroup, type OverlayId } from '../lib/overlays.ts';
 import { InfoIcon, InfoTip } from './InfoTip.tsx';
 
 interface Props {
@@ -77,11 +77,11 @@ export function OverlayMenu({ active, intraday, barCount, onToggle, onClear }: P
                     return (
                       <label key={o.id} className={`menu-item ${why ? 'unavailable' : ''}`}>
                         <input type="checkbox" checked={on} onChange={() => onToggle(o.id)} aria-label={o.label} />
-                        <span className="swatch" style={{ background: o.color }} />
+                        <span className="swatch" style={{ background: swatchColor(o) }} />
                         <span className="menu-label">{o.label}</span>
                         {why && on && <span className="menu-note">{why}</span>}
                         <InfoTip text={why && !on ? `${o.info} (${why}.)` : o.info}>
-                          <span className="info-btn" tabIndex={0} aria-label={`About ${o.label}`}>
+                          <span className="info-btn" tabIndex={0} aria-label={`About ${o.label}`} onClick={(e) => e.preventDefault()}>
                             <InfoIcon />
                           </span>
                         </InfoTip>
@@ -109,7 +109,7 @@ export function ActiveOverlays({ active, intraday, barCount, onToggle }: { activ
         return (
           <InfoTip key={o.id} text={why ? `${o.info} Not shown: ${why.toLowerCase()}.` : o.info}>
             <span className={`overlay-chip ${why ? 'muted' : ''}`} tabIndex={0}>
-              <span className="swatch" style={{ background: o.color }} />
+              <span className="swatch" style={{ background: swatchColor(o) }} />
               {o.label}
               <button className="chip-x" onClick={() => onToggle(o.id)} aria-label={`Remove ${o.label}`}>
                 ×

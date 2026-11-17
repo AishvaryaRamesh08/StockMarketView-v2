@@ -39,7 +39,7 @@ export function diffTail(prev: Candle[], next: Candle[]): { kind: 'reset' } | { 
  * last price, total volume. Used when the provider sends today's daily candle empty (Yahoo does
  * this for NSE/BSE stocks) but has the intraday bars.
  */
-export function sessionFromIntraday(t: number, intraday: Candle[], lastPrice?: number | null): Candle | null {
+export function sessionFromIntraday(t: number, intraday: Candle[], lastPrice?: number | null, dayVolume?: number | null): Candle | null {
   if (intraday.length === 0) return null;
   const c = lastPrice ?? intraday[intraday.length - 1].c;
   let h = c;
@@ -50,5 +50,6 @@ export function sessionFromIntraday(t: number, intraday: Candle[], lastPrice?: n
     if (b.l < l) l = b.l;
     v += b.v;
   }
-  return { t, o: intraday[0].o, h, l, c, v };
+  // Intraday bars miss the opening and closing auctions, so prefer the day's reported total.
+  return { t, o: intraday[0].o, h, l, c, v: dayVolume != null && dayVolume > 0 ? dayVolume : v };
 }

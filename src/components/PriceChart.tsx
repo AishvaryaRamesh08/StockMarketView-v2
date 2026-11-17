@@ -24,9 +24,11 @@ import {
   type WhitespaceData,
 } from 'lightweight-charts';
 import { diffTail } from '../lib/candles.ts';
+import { CloudPrimitive, type CloudPoint } from './cloudPrimitive.ts';
 import { sessionKeyFn, tzOffsetMs } from '../lib/markets.ts';
 import { formatPrice, formatVolume } from '../lib/format.ts';
-import { detectPatterns, type PatternId } from '../lib/patterns.ts';
+import { PATTERN_BIAS, detectPatterns, type Bias, type PatternId } from '../lib/patterns.ts';
+import { cssVar, useAppearanceKey } from '../lib/theme.ts';
 import { OVERLAY_BY_ID, PATTERN_IDS, PATTERN_SHORT, type OverlayId } from '../lib/overlays.ts';
 import { OSCILLATOR_PANES, buildStudies, futureTimes, type StudySpec } from '../lib/studies.ts';
 import type { Level } from '../lib/levels.ts';
@@ -60,9 +62,6 @@ interface Props {
   compact?: boolean;
 }
 
-function cssVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
 
 /**
  * Lightweight Charts draws timestamps as UTC. Shift each bar by its exchange's UTC offset so
@@ -118,6 +117,11 @@ const LEVEL_STYLE: Record<Level['kind'], { color: string; style: LineStyle; titl
 };
 
 // Stable defaults: a fresh `[]` per render would re-run the effects below on every render.
+/** Bullish/bearish things follow the theme's up/down colours (which the colour-blind palette changes). */
+function biasColor(bias: Bias, neutral: string): string {
+  return bias === 'bullish' ? cssVar('--up') : bias === 'bearish' ? cssVar('--down') : neutral;
+}
+
 const EMPTY_SET: ReadonlySet<OverlayId> = new Set();
 const NO_EVENTS: CorporateEvent[] = [];
 const NO_LEVELS: Level[] = [];
@@ -153,6 +157,7 @@ function PriceChartImpl({
   const studiesRef = useRef<StudySpec[]>([]);
   const compareRef = useRef<CompareLine[]>([]);
   const patternsAt = useRef(new Map<number, PatternId[]>());
+  const cloudRef = useRef<CloudPrimitive | null>(null);
   const applyingSync = useRef(false);
   const fmt = useRef({ currency, digits, compact });
   fmt.current = { currency, digits, compact };
@@ -201,7 +206,8 @@ function PriceChartImpl({
       html += `<div class="lg-row">${pats
         .map((id) => {
           const def = OVERLAY_BY_ID.get(id)!;
-          return `<span class="lg-pattern" style="color:${def.color}">${def.color === '#22c38e' ? '▲' : def.color === '#f2555a' ? '▼' : '●'} ${def.label}</span>`;
+          const bias = PATTERN_BIAS[id];
+          return `<span class="lg-pattern" style="color:${biasColor(bias, def.color)}">${bias === 'bullish' ? '▲' : bias === 'bearish' ? '▼' : '●'} ${def.label}</span>`;
         })
         .join('')}</div>`;
     }
@@ -248,6 +254,7 @@ function PriceChartImpl({
       volumeRef.current = null;
       markersRef.current = null;
       studySeries.current.clear();
+      cloudRef.current = null;
       compareSeries.current.clear();
       priceLines.current = [];
       drawn.current = { version: '', candles: [] };
@@ -404,6 +411,27 @@ function PriceChartImpl({
       entry.api.setData(data as never);
     }
 
+    // Ichimoku: shade the cloud between span A and span B.
+    const spanA = specs.find((x) => x.key === 'ich.spanA');
+    const spanB = specs.find((x) => x.key === 'ich.spanB');
+    const candleSeries = candleRef.current;
+    if (spanA && spanB && candleSeries) {
+      const points: CloudPoint[] = [];
+      for (let i = 0; i < spanA.values.length && i < allTimes.length; i++) {
+        const a = spanA.values[i];
+        const b = spanB.values[i];
+        if (a != null && b != null) points.push({ time: allTimes[i], a, b });
+      }
+      if (!cloudRef.current) {
+        cloudRef.current = new CloudPrimitive();
+        candleSeries.attachPrimitive(cloudRef.current);
+      }
+      cloudRef.current.setData(points, cssVar('--up-soft'), cssVar('--down-soft'));
+    } else if (cloudRef.current && candleSeries) {
+      candleSeries.detachPrimitive(cloudRef.current);
+      cloudRef.current = null;
+    }
+
     const finalPanes = chart.panes();
     finalPanes[0]?.setStretchFactor(3);
     for (let i = 1; i < finalPanes.length; i++) finalPanes[i].setStretchFactor(1);
@@ -430,7 +458,7 @@ function PriceChartImpl({
           time: shift(hit.t),
           position: hit.bias === 'bullish' ? 'belowBar' : 'aboveBar',
           shape: hit.bias === 'bullish' ? 'arrowUp' : hit.bias === 'bearish' ? 'arrowDown' : 'circle',
-          color: def.color,
+          color: biasColor(hit.bias, def.color),
           text: labelled.has(hit) ? PATTERN_SHORT[hit.pattern] : undefined,
         });
       }
@@ -461,7 +489,8 @@ function PriceChartImpl({
     for (const l of priceLines.current) candle.removePriceLine(l);
     priceLines.current = levels.map((l) => {
       const st = LEVEL_STYLE[l.kind];
-      return candle.createPriceLine({ price: l.price, color: st.color, lineStyle: st.style, lineWidth: 1, axisLabelVisible: true, title: st.title });
+      const color = l.kind === 'resistance' ? cssVar('--down') : l.kind === 'support' ? cssVar('--up') : st.color;
+      return candle.createPriceLine({ price: l.price, color, lineStyle: st.style, lineWidth: 1, axisLabelVisible: true, title: st.title });
     });
   }, [levels]);
 
@@ -500,4 +529,10 @@ function PriceChartImpl({
   );
 }
 
-export const PriceChart = memo(PriceChartImpl);
+const MemoChart = memo(PriceChartImpl);
+
+/** Rebuilt when the theme or palette changes, because the canvas reads its colours once. */
+export function PriceChart(props: Props) {
+  const appearance = useAppearanceKey();
+  return <MemoChart key={appearance} {...props} />;
+}

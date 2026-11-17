@@ -37,7 +37,9 @@ added when the build is complete.
 - **Patterns today**: every NIFTY 500 and S&P 500 stock scanned for candlestick patterns after each close,
   ranked by unusual volume, with RSI; one click opens the chart with the pattern marked.
 - **Similar stocks**: same-industry peers below the chart, with one-click compare.
-- **Remembers your setup**: last view, stock, timeframe, indicators and layout.
+- **Appearance**: dark and light themes, plus a colour-blind-friendly blue/orange palette for up/down.
+- **Command palette** (Cmd/Ctrl+K): search stocks, or type a command such as "light theme", "show RSI" or "go to markets".
+- **Remembers your setup**: last view, stock, timeframe, indicators, layout and appearance.
 
 Upcoming earnings dates are not shown: Yahoo only serves them to logged-in sessions.
 
@@ -70,7 +72,8 @@ Prices are labelled "refreshed every 30s", never "real-time": Yahoo's feed is un
 ## Project layout
 
 ```
-server/api.ts             Data API (Yahoo-specific code lives only here, so the provider can be swapped)
+server/api.ts             Data API: routes, validation, edge caching
+server/yahoo.ts           Everything Yahoo-specific (URLs, response shapes, quirk fixes), shared with scripts/
 worker/index.ts           Cloudflare Worker entry: /api/* to the data API, everything else to dist/
 src/lib/                  Indicators, patterns, key levels, summary, market hours, period/interval rules,
                           candle merging, search, formatting (all with tests)

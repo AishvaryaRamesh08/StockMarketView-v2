@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatPct, formatPrice } from '../lib/format.ts';
 import type { PulseStock } from '../lib/marketData.ts';
-import { changeColor, sectors, type SectorSummary } from '../lib/pulse.ts';
+import { DEFAULT_HEAT, changeColor, parseRgbTriple, sectors, type HeatScheme, type SectorSummary } from '../lib/pulse.ts';
+import { cssVar, useAppearanceKey } from '../lib/theme.ts';
 import { squarify, type Tile } from '../lib/treemap.ts';
 
 interface Props {
@@ -21,6 +22,15 @@ export function Heatmap({ stocks, currency, onOpen }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [hover, setHover] = useState<{ s: PulseStock; x: number; y: number } | null>(null);
+  const appearance = useAppearanceKey();
+  const scheme: HeatScheme = useMemo(
+    () => ({
+      neutral: parseRgbTriple(cssVar('--hm-neutral'), DEFAULT_HEAT.neutral),
+      up: parseRgbTriple(cssVar('--hm-up'), DEFAULT_HEAT.up),
+      down: parseRgbTriple(cssVar('--hm-down'), DEFAULT_HEAT.down),
+    }),
+    [appearance],
+  );
 
   useEffect(() => {
     const el = box.current!;
@@ -62,7 +72,7 @@ export function Heatmap({ stocks, currency, onOpen }: Props) {
             <button
               key={s.s}
               className="hm-tile"
-              style={{ left: t.x, top: t.y, width: Math.max(0, t.w - 1), height: Math.max(0, t.h - 1), background: changeColor(s.chg) }}
+              style={{ left: t.x, top: t.y, width: Math.max(0, t.w - 1), height: Math.max(0, t.h - 1), background: changeColor(s.chg, scheme) }}
               onClick={() => onOpen(s.s)}
               onMouseMove={(e) => {
                 const r = box.current!.getBoundingClientRect();

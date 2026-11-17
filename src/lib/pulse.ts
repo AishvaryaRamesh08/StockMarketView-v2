@@ -43,11 +43,25 @@ export function sectors(stocks: PulseStock[]): SectorSummary[] {
     .sort((a, b) => b.cap - a.cap);
 }
 
-/** Tile colour for a % change: red ↔ neutral ↔ green, saturating at ±3%. */
-export function changeColor(chg: number): string {
+export interface HeatScheme {
+  neutral: number[];
+  up: number[];
+  down: number[];
+}
+
+export const DEFAULT_HEAT: HeatScheme = { neutral: [52, 58, 72], up: [22, 160, 112], down: [214, 64, 69] };
+
+/** "22, 160, 112" (a CSS variable's value) → [22, 160, 112]. */
+export function parseRgbTriple(value: string, fallback: number[]): number[] {
+  const parts = value.split(',').map((x) => Number(x.trim()));
+  return parts.length === 3 && parts.every((n) => Number.isFinite(n)) ? parts : fallback;
+}
+
+/** Tile colour for a % change: down ↔ neutral ↔ up, saturating at ±3%. */
+export function changeColor(chg: number, scheme: HeatScheme = DEFAULT_HEAT): string {
   const t = Math.max(-1, Math.min(1, chg / 3));
-  const neutral = [52, 58, 72];
-  const target = t >= 0 ? [22, 160, 112] : [214, 64, 69];
+  const neutral = scheme.neutral;
+  const target = t >= 0 ? scheme.up : scheme.down;
   const k = Math.abs(t) ** 0.8;
   const c = neutral.map((n, i) => Math.round(n + (target[i] - n) * k));
   return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;

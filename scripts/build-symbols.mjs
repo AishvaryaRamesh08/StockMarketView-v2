@@ -9,6 +9,7 @@
  * Run with `npm run symbols`. Commit the result; the site does not fetch these sources at runtime.
  */
 import { readFile, writeFile } from 'node:fs/promises';
+import { YAHOO_HOSTS, YAHOO_MAX_BATCH, yahooPath } from '../server/yahoo.ts';
 
 const ROOT = new URL('..', import.meta.url);
 const UA = { 'User-Agent': 'Mozilla/5.0 (compatible; StockMarketView symbol builder)' };
@@ -117,9 +118,9 @@ async function us() {
 async function keepActive(rows) {
   const cutoff = Date.now() / 1000 - 30 * 86400;
   const active = new Set();
-  for (let i = 0; i < rows.length; i += 20) {
-    const batch = rows.slice(i, i + 20).map((r) => r[0]);
-    const url = `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${batch.map(encodeURIComponent).join(',')}&range=5d&interval=1d`;
+  for (let i = 0; i < rows.length; i += YAHOO_MAX_BATCH) {
+    const batch = rows.slice(i, i + YAHOO_MAX_BATCH).map((r) => r[0]);
+    const url = YAHOO_HOSTS[0] + yahooPath.spark(batch, '5d', '1d');
     try {
       const res = await fetch(url, { headers: UA });
       if (res.ok) {

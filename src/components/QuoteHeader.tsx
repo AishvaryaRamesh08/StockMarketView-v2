@@ -48,7 +48,8 @@ function Freshness({ symbol, lastUpdated, refreshError, quote }: { symbol: strin
     const last = quote?.marketTime ? formatLocalTime(new Date(quote.marketTime * 1000), true) : null;
     return (
       <span className="freshness state-closed">
-        <span className="status-dot" /> Market closed{last ? ` · last trade ${last}` : ''}
+        <span className="status-dot" /> {status.state === 'pre-open' ? status.label : status.state === 'holiday' ? `Holiday: ${status.label}` : 'Market closed'}
+        {last ? ` · last trade ${last}` : ''}
       </span>
     );
   }
