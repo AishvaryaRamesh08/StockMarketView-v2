@@ -176,8 +176,8 @@ export function Portfolio({ market, onMarket, paper, quotes, onOpen, onToast, on
         {positions.length === 0 ? (
           <p className="empty-note">No holdings. Open any {market === 'IN' ? 'NSE or BSE' : 'US'} stock and use the Trade panel beside the chart.</p>
         ) : (
-          <div className="pt-table" role="table">
-            <div className="pt-row pt-head" role="row">
+          <div className="pt-table">
+            <div className="pt-row pt-head">
               <span>Stock</span>
               <span className="num-col">Qty</span>
               <span className="num-col">Avg cost</span>
@@ -191,7 +191,7 @@ export function Portfolio({ market, onMarket, paper, quotes, onOpen, onToast, on
               const pnl = last != null ? (last - p.avgCost) * p.qty : null;
               const q = quotes[p.symbol];
               return (
-                <button key={p.symbol} className="pt-row" role="row" onClick={() => onOpen(p.symbol)}>
+                <button key={p.symbol} className="pt-row" onClick={() => onOpen(p.symbol)}>
                   <span className="pf-stock">
                     <b>{ticker(p.symbol)}</b>
                     <span>{q?.name ?? ''}</span>

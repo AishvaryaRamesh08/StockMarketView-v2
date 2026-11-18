@@ -138,8 +138,8 @@ export function WhatIf({ symbol, currency }: { symbol: string; currency: string 
             <b className={`num ${result.s.gain >= 0 ? 'up' : 'down'}`}>{money(result.s.value)}</b> today.
           </p>
           <div className="whatif-grid">
-            <div className="pt-table" role="table" aria-label="Comparison">
-              <div className="pt-row wi-row pt-head" role="row">
+            <div className="pt-table" role="group" aria-label="Comparison">
+              <div className="pt-row wi-row pt-head">
                 <span>In</span>
                 <span className="num-col">Put in</span>
                 <span className="num-col">Worth now</span>
@@ -147,7 +147,7 @@ export function WhatIf({ symbol, currency }: { symbol: string; currency: string 
                 <span className="num-col">{kind === 'sip' ? 'XIRR' : 'CAGR'}</span>
               </div>
               {rows.map((r) => (
-                <div key={r.name} className={`pt-row wi-row ${r.main ? 'main' : ''}`} role="row">
+                <div key={r.name} className={`pt-row wi-row ${r.main ? 'main' : ''}`}>
                   <b>{r.name}</b>
                   <span className="num num-col">{money(r.invested)}</span>
                   <span className="num num-col">{money(r.value)}</span>

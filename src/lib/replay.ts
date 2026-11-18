@@ -18,6 +18,19 @@ export function replayStart(count: number, interval: IntervalId): number {
   return Math.max(minContext, Math.min(count - 2, count - 1 - back));
 }
 
+/** Moving `k` candles from `pos`: never before the session's first candle or past the last. */
+export function stepPosition(pos: number, k: number, startPos: number, count: number): number {
+  return Math.max(startPos, Math.min(count - 1, pos + k));
+}
+
+/**
+ * Trades happen only on the furthest candle reached. Stepping back to look is fine, but buying
+ * or selling there would mean trading with knowledge of what came next.
+ */
+export function canTradeAt(pos: number, furthest: number): boolean {
+  return pos >= furthest;
+}
+
 export const PRACTICE_CASH: Record<MarketId, number> = { IN: 100_000, US: 10_000 };
 
 export interface ReplayTrade {

@@ -70,7 +70,7 @@ export function QuoteHeader({ symbol, quote, profile, loading, lastUpdated, refr
 
   if (loading && !quote) {
     return (
-      <header className="quote-header">
+      <header className="quote-header loading">
         <div className="quote-title">
           <span className="skeleton skeleton-text" style={{ width: 220, height: 22 }} />
           <span className="skeleton skeleton-text" style={{ width: 140 }} />

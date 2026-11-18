@@ -47,17 +47,32 @@ export function usePulse(market: MarketId, enabled: boolean): { pulse: Pulse | n
   return state.market === market ? state : { pulse: null, error: null, lastUpdated: null };
 }
 
+const feedCache = new Map<MarketId, { at: number; p: Promise<PatternFeed> }>();
+const FEED_TTL = 15 * 60_000;
+
+/** The scan result, shared by every component that shows it and refetched at most every 15 minutes. */
+function loadFeed(market: MarketId): Promise<PatternFeed> {
+  const hit = feedCache.get(market);
+  if (hit && Date.now() - hit.at < FEED_TTL) return hit.p;
+  const p = getJson<PatternFeed>(`/api/patterns?market=${market}`);
+  p.catch(() => feedCache.delete(market));
+  feedCache.set(market, { at: Date.now(), p });
+  return p;
+}
+
 /** Candlestick patterns found by the scheduled scan of the latest session. */
 export function usePatternFeed(market: MarketId, enabled: boolean): { feed: PatternFeed | null; error: string | null } {
   const [state, setState] = useState<{ market: MarketId; feed: PatternFeed | null; error: string | null }>({ market, feed: null, error: null });
-  const tick = useNow(15 * 60_000);
+  const tick = useNow(FEED_TTL);
   useEffect(() => {
     if (!enabled) return;
-    const c = new AbortController();
-    getJson<PatternFeed>(`/api/patterns?market=${market}`, c.signal)
-      .then((feed) => setState({ market, feed, error: null }))
-      .catch((err: Error) => err.name !== 'AbortError' && setState({ market, feed: null, error: err.message }));
-    return () => c.abort();
+    let live = true;
+    loadFeed(market)
+      .then((feed) => live && setState({ market, feed, error: null }))
+      .catch((err: Error) => live && setState({ market, feed: null, error: err.message }));
+    return () => {
+      live = false;
+    };
   }, [market, enabled, tick]);
   return state.market === market ? state : { feed: null, error: null };
 }

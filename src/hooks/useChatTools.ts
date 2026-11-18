@@ -3,32 +3,25 @@ import { fetchChart, fetchQuotes } from '../lib/api.ts';
 import { fitRange, periodFor, resolveTicker, systemPrompt, toInterval, toOverlay, toPeriod, type ChatContext } from '../lib/chatTools.ts';
 import type { FunctionCall, ToolOutcome } from '../lib/gemini.ts';
 import { marketOf, marketStatus } from '../lib/markets.ts';
-import { OVERLAY_BY_ID, type OverlayId } from '../lib/overlays.ts';
+import { OVERLAY_BY_ID } from '../lib/overlays.ts';
 import { INTERVALS, PERIODS, type IntervalId, type PeriodId } from '../lib/ranges.ts';
 import { loadSymbols, type SymbolEntry } from '../lib/search.ts';
 import { summarize } from '../lib/summary.ts';
 import type { MarketId, Quote } from '../lib/types.ts';
-import type { Frame } from '../components/MultiTimeframe.tsx';
+import type { Frame } from '../lib/frames.ts';
 import type { PaperState } from '../lib/paper.ts';
 import { portfolioSnapshot } from '../lib/paperStats.ts';
 import { loadUniverse } from './useMarketData.ts';
+import type { ScreenPatch, ScreenState, SiteActions } from '../lib/siteActions.ts';
 
 /** The part of the page state the chatbot reads and changes. */
-export interface ChatPrefs {
-  symbol: string;
-  period: PeriodId;
-  interval: IntervalId;
-  overlays: OverlayId[];
-  compare: string[];
-  layout: 'single' | 'multi';
-  view: 'markets' | 'chart' | 'portfolio';
-}
+export type ChatPrefs = ScreenState;
 
 interface Deps {
   prefs: ChatPrefs;
   name?: string;
-  update: (patch: Partial<ChatPrefs> & { frames?: Frame[]; pulseMarket?: MarketId }) => void;
-  selectSymbol: (s: string) => void;
+  /** The same screen actions the command palette uses. */
+  actions: SiteActions;
   watchlist: { name: string; symbols: string[]; toggle: (s: string) => void };
   maxCompare: number;
   /** The paper account, read only when the visitor asks Ask AI about it. */
@@ -67,11 +60,12 @@ export function useChatTools(deps: Deps) {
   const pending = useRef<Partial<ChatPrefs>>({});
   pending.current = {};
   const current = (): ChatPrefs => ({ ...ref.current.prefs, ...pending.current });
-  const apply = (patch: Partial<ChatPrefs> & { frames?: Frame[]; pulseMarket?: MarketId }) => {
+  /** Remembers what an action changed, for the next tool call in the same reply. */
+  const track = (patch: ScreenPatch) => {
     const { frames: _f, pulseMarket: _m, ...rest } = patch;
     pending.current = { ...pending.current, ...rest };
-    ref.current.update(patch);
   };
+  const act = () => ref.current.actions;
 
   const symbols = async (): Promise<SymbolEntry[]> => loadSymbols();
   const resolve = async (q: unknown) => {
@@ -89,8 +83,7 @@ export function useChatTools(deps: Deps) {
         const askedP = toPeriod(a.period);
         const askedI = toInterval(a.interval);
         const fit = fitRange(askedP ?? p.period, askedI ?? p.interval, !!askedI && !askedP);
-        ref.current.selectSymbol(e.symbol);
-        apply({ symbol: e.symbol, period: fit.period, interval: fit.interval, view: 'chart', layout: 'single' });
+        track(act().openChart(p, e.symbol, { period: fit.period, interval: fit.interval, layout: 'single' }));
         return {
           result: { ok: true, symbol: e.symbol, name: e.name, exchange: e.exchange, period: fit.period, interval: fit.interval, ...(fit.adjusted ? { note: fit.adjusted } : {}) },
           note: `Opened ${short(e.symbol)} · ${periodLabel(fit.period)} · ${intervalLabel(fit.interval)}`,
@@ -103,11 +96,11 @@ export function useChatTools(deps: Deps) {
         const label = OVERLAY_BY_ID.get(id)!.label;
         const has = p.overlays.includes(id);
         if (call.name === 'add_overlay') {
-          if (!has) apply({ overlays: [...p.overlays, id], view: 'chart' });
+          track(act().setOverlay(p, id, true));
           const intradayOnly = OVERLAY_BY_ID.get(id)!.intradayOnly && ['1d', '1wk', '1mo'].includes(p.interval);
           return { result: { ok: true, overlay: id, label, ...(intradayOnly ? { note: `${label} only shows on intraday candles; switch to an interval like 5m.` } : {}) }, note: `Added ${label}` };
         }
-        if (has) apply({ overlays: p.overlays.filter((o) => o !== id) });
+        if (has) track(act().setOverlay(p, id, false));
         return { result: { ok: true, removed: id }, note: has ? `Removed ${label}` : undefined };
       }
       case 'compare': {
@@ -119,7 +112,7 @@ export function useChatTools(deps: Deps) {
           if (e && e.symbol !== p.symbol && !found.includes(e.symbol)) found.push(e.symbol);
           else if (!e) missing.push(String(t));
         }
-        apply({ compare: found, view: 'chart', layout: 'single' });
+        track(act().setCompare(p, found));
         return {
           result: { ok: true, base: p.symbol, comparing: found, ...(missing.length ? { notFound: missing } : {}), ...(list.length > ref.current.maxCompare ? { note: `Only ${ref.current.maxCompare} can be compared at once.` } : {}) },
           note: found.length ? `Comparing ${short(p.symbol)} with ${found.map(short).join(', ')}` : 'Cleared comparison',
@@ -131,8 +124,7 @@ export function useChatTools(deps: Deps) {
         const defaults: IntervalId[] = ['15m', '60m', '1d'];
         const intervals = [...asked, ...defaults.filter((d) => !asked.includes(d))].slice(0, 3);
         const frames: Frame[] = intervals.map((i) => ({ interval: i, period: periodFor(i) }));
-        ref.current.selectSymbol(e.symbol);
-        apply({ symbol: e.symbol, layout: 'multi', view: 'chart', frames });
+        track(act().showMultiTimeframe(e.symbol, frames));
         return { result: { ok: true, symbol: e.symbol, frames }, note: `Multi-timeframe ${short(e.symbol)}: ${intervals.map(intervalLabel).join(', ')}` };
       }
       case 'get_quote': {
@@ -165,7 +157,7 @@ export function useChatTools(deps: Deps) {
       }
       case 'open_markets': {
         const m: MarketId = a.market === 'IN' ? 'IN' : 'US';
-        apply({ view: 'markets', pulseMarket: m });
+        track(act().openMarkets(m));
         return { result: { ok: true, market: m }, note: `Opened ${m === 'IN' ? 'India' : 'US'} markets` };
       }
       case 'get_portfolio': {

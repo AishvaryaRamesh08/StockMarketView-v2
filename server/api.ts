@@ -7,13 +7,14 @@
  * Every upstream response is cached at the edge, so many visitors watching the same ticker
  * share one upstream request. Everything Yahoo-specific lives in server/yahoo.ts.
  */
-import type { ChartResponse, Candle, CorporateEvent, Quote, QuotesResponse, ApiError, Profile } from '../src/lib/types.ts';
+import type { ChartResponse, Candle, ClosesResponse, CorporateEvent, Quote, QuotesResponse, ApiError, Profile } from '../src/lib/types.ts';
 import {
   YAHOO_HOSTS,
   YAHOO_MAX_BATCH,
   appendTodayCandle,
   latestTimeseriesValue,
   parseCandles,
+  parseSparkCloses,
   relatedSymbols,
   searchClassification,
   yahooPath,
@@ -212,6 +213,29 @@ async function quotes(params: URLSearchParams): Promise<Response> {
   return json({ quotes: out } satisfies QuotesResponse, 200, 20);
 }
 
+/**
+ * Closing prices for up to 20 symbols in one upstream call, for the compare overlay: one
+ * request covers every compared stock instead of one each. Cached like the chart route.
+ */
+async function closes(params: URLSearchParams): Promise<Response> {
+  const symbols = (params.get('symbols') ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const range = params.get('range') ?? '6mo';
+  const interval = params.get('interval') ?? '1d';
+  if (symbols.length === 0 || symbols.length > MAX_QUOTES) return fail(400, `Pass 1–${MAX_QUOTES} symbols`);
+  if (!symbols.every((s) => SYMBOL_RE.test(s))) return fail(400, 'Invalid symbol');
+  if (!(RANGES as readonly string[]).includes(range)) return fail(400, 'Invalid range');
+  if (!(INTERVALS as readonly string[]).includes(interval)) return fail(400, 'Invalid interval');
+  const data = (await upstream(yahooPath.spark(symbols, range, interval))) as YahooSparkResponse;
+  const series = parseSparkCloses(data, interval === '1d').map((r) => {
+    const q = toQuote(r.meta, r.meta.previousClose ?? r.meta.chartPreviousClose ?? null);
+    return { symbol: r.symbol, name: q.name, timezone: q.timezone, closes: r.closes };
+  });
+  return json({ series } satisfies ClosesResponse, 200, ttlFor(range));
+}
+
 /* --------------------------------- profile --------------------------------- */
 
 /**
@@ -408,6 +432,7 @@ export async function handleApi(request: Request, waitUntil?: (p: Promise<unknow
     else if (route === 'patterns') res = await patternsRoute(url.searchParams);
     else if (route === 'universe') res = await universeRoute(url.searchParams);
     else if (route === 'news') res = await newsRoute(url.searchParams);
+    else if (route === 'closes') res = await closes(url.searchParams);
     else res = fail(404, 'Unknown endpoint');
   } catch (err) {
     const status = err instanceof UpstreamError ? err.status : 0;

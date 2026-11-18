@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buyIn, equityOf, newAccount, replayRange, replayStart, sellOut, type ReplayAccount } from './replay.ts';
+import { buyIn, canTradeAt, equityOf, newAccount, replayRange, replayStart, sellOut, stepPosition, type ReplayAccount } from './replay.ts';
 import { unsupportedReason, INTERVALS } from './ranges.ts';
 
 describe('replay setup', () => {
@@ -33,5 +33,17 @@ describe('practice account', () => {
     expect(buyIn(a, 1000, 100, 1)).toMatch(/Not enough practice cash \(max 100\)/);
     expect(buyIn(a, 1.5, 10, 1)).toMatch(/whole number/);
     expect(sellOut(a, 1, 10, 1)).toMatch(/Nothing to sell/);
+  });
+});
+
+describe('no trading with hindsight', () => {
+  it('steps within the session: never before its first candle or past the last', () => {
+    expect(stepPosition(100, -5, 98, 200)).toBe(98);
+    expect(stepPosition(195, 10, 98, 200)).toBe(199);
+  });
+  it('only trades on the furthest candle reached, not after stepping back to look', () => {
+    // Reached candle 120, stepped back to 115 to look: trading there would use hindsight.
+    expect(canTradeAt(115, 120)).toBe(false);
+    expect(canTradeAt(120, 120)).toBe(true);
   });
 });

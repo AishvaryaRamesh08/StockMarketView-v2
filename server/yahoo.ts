@@ -66,7 +66,39 @@ export interface YahooChartResponse {
 }
 
 export interface YahooSparkResponse {
-  spark?: { result?: Array<{ symbol: string; response?: Array<{ meta: YahooMeta; indicators?: { quote?: Array<{ close?: (number | null)[] }> } }> }> };
+  spark?: { result?: Array<{ symbol: string; response?: Array<{ meta: YahooMeta; timestamp?: number[]; indicators?: { quote?: Array<{ close?: (number | null)[] }> } }> }> };
+}
+
+/**
+ * Closing prices per symbol from one batched spark response, skipping the null-padded gaps.
+ * Spark carries no open/high/low, so each point is returned as [time, close].
+ */
+export function parseSparkCloses(data: YahooSparkResponse, daily = false): Array<{ symbol: string; meta: YahooMeta; closes: Array<[number, number]> }> {
+  const out: Array<{ symbol: string; meta: YahooMeta; closes: Array<[number, number]> }> = [];
+  for (const r of data.spark?.result ?? []) {
+    const resp = r.response?.[0];
+    if (!resp) continue;
+    const ts = resp.timestamp ?? [];
+    const cl = resp.indicators?.quote?.[0]?.close ?? [];
+    const closes: Array<[number, number]> = [];
+    for (let i = 0; i < ts.length; i++) if (cl[i] != null) closes.push([ts[i], cl[i]!]);
+    out.push({ symbol: r.symbol, meta: resp.meta, closes: withLatestPrice(closes, resp.meta, daily) });
+  }
+  return out;
+}
+
+/**
+ * Daily closes: Yahoo leaves today's close empty for NSE/BSE stocks, so add today's point from
+ * the live price when the series stops on an earlier exchange-local day.
+ */
+export function withLatestPrice(closes: Array<[number, number]>, meta: YahooMeta, daily: boolean): Array<[number, number]> {
+  const price = meta.regularMarketPrice;
+  const t = meta.regularMarketTime;
+  if (!daily || price == null || t == null || closes.length === 0) return closes;
+  const off = meta.gmtoffset ?? 0;
+  const day = (x: number) => Math.floor((x + off) / 86400);
+  const last = closes[closes.length - 1];
+  return day(t) > day(last[0]) ? [...closes, [t, price]] : closes;
 }
 
 /** OHLCV bars from a chart result, skipping the null-padded gaps Yahoo inserts. */

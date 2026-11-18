@@ -52,6 +52,11 @@ export interface QuotesResponse {
   quotes: Quote[];
 }
 
+/** Closing prices only, for several symbols in one request (the compare overlay). */
+export interface ClosesResponse {
+  series: Array<{ symbol: string; name: string; timezone: string; closes: Array<[number, number]> }>;
+}
+
 /** Slow-changing company data. Every field is optional: the UI hides what is missing. */
 export interface Profile {
   symbol: string;

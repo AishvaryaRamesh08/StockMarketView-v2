@@ -63,6 +63,15 @@ export function MarketPulse({ market, onMarket, onOpen }: Props) {
           </div>
           <MarketStatusPill market={market} />
         </div>
+        {stocks.length === 0 && (
+          // Same size as the real line, so the page doesn't jump when the data arrives.
+          <div className="breadth" aria-hidden style={{ visibility: 'hidden' }}>
+            <span className="breadth-label">
+              <b>0 up</b> · <b>0 down</b>
+            </span>
+            <span className="breadth-bar" />
+          </div>
+        )}
         {stocks.length > 0 && (
           <div className="breadth">
             <InfoTip text={`Market breadth: how many ${index} stocks are up versus down today. A rising index with most stocks falling is a narrow, fragile rally.`}>
@@ -93,7 +102,7 @@ export function MarketPulse({ market, onMarket, onOpen }: Props) {
             <Sparkline values={q.spark} prevClose={q.prevClose} width={120} height={34} />
           </button>
         ))}
-        {!pulse && Array.from({ length: 4 }, (_, i) => <div key={i} className="index-card skeleton" style={{ height: 96 }} />)}
+        {!pulse && Array.from({ length: 4 }, (_, i) => <div key={i} className="index-card skeleton" />)}
       </div>
 
       <div className="pulse-grid">
@@ -105,7 +114,7 @@ export function MarketPulse({ market, onMarket, onOpen }: Props) {
                   <h2 id={`mv-${k}`}>{k === 'gainers' ? 'Top gainers' : 'Top losers'}</h2>
                   <span className="card-sub">{index} · today</span>
                 </div>
-                <ul className="mover-list">{stocks.length ? movers[k].map(moverRow) : Array.from({ length: 8 }, (_, i) => <li key={i} className="skeleton" style={{ height: 38, margin: '4px 0' }} />)}</ul>
+                <ul className="mover-list">{stocks.length ? movers[k].map(moverRow) : Array.from({ length: 10 }, (_, i) => <li key={i} className="skeleton" style={{ height: 42, margin: '3px 0' }} />)}</ul>
               </section>
             ))}
           </div>
@@ -152,7 +161,7 @@ export function MarketPulse({ market, onMarket, onOpen }: Props) {
                     </li>
                   );
                 })
-              : !newsError && Array.from({ length: 6 }, (_, i) => <li key={i} className="skeleton" style={{ height: 72, margin: '8px 0' }} />)}
+              : !newsError && Array.from({ length: 8 }, (_, i) => <li key={i} className="skeleton" style={{ height: 111, margin: '8px 0' }} />)}
           </ul>
           {news && news.items.length > 8 && (
             <button className="link news-more" onClick={() => setAllNews((v) => !v)}>

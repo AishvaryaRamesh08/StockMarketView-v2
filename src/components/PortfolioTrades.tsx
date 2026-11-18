@@ -173,8 +173,8 @@ export function TradesSection({ fills, market, currency, quotes, onOpen }: { fil
           </div>
 
           {view === 'stock' ? (
-            <div className="pt-table" role="table" aria-label="P&L by stock">
-              <div className="pt-row trades-row pt-head" role="row">
+            <div className="pt-table" role="group" aria-label="P&L by stock">
+              <div className="pt-row trades-row pt-head">
                 <span>Stock</span>
                 <span className="num-col">Bought</span>
                 <span className="num-col">Invested</span>
@@ -183,7 +183,7 @@ export function TradesSection({ fills, market, currency, quotes, onOpen }: { fil
                 <span className="num-col">Realised P&amp;L</span>
               </div>
               {byStock.map((r) => (
-                <button key={r.symbol} className="pt-row trades-row" role="row" onClick={() => onOpen(r.symbol)}>
+                <button key={r.symbol} className="pt-row trades-row" onClick={() => onOpen(r.symbol)}>
                   <span className="pf-stock">
                     <b>{ticker(r.symbol)}</b>
                     <span>
@@ -209,8 +209,8 @@ export function TradesSection({ fills, market, currency, quotes, onOpen }: { fil
               ))}
             </div>
           ) : (
-            <div className="pt-table" role="table" aria-label="P&L by day">
-              <div className="pt-row days-row pt-head" role="row">
+            <div className="pt-table" role="group" aria-label="P&L by day">
+              <div className="pt-row days-row pt-head">
                 <span>Day</span>
                 <span>Stocks</span>
                 <span className="num-col">Invested</span>
@@ -218,7 +218,7 @@ export function TradesSection({ fills, market, currency, quotes, onOpen }: { fil
                 <span className="num-col">Realised P&amp;L</span>
               </div>
               {byDay.map((d) => (
-                <div key={d.day} className="pt-row days-row" role="row">
+                <div key={d.day} className="pt-row days-row">
                   <span>
                     <b>{new Date(`${d.day}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}</b>
                     <span className="card-sub">

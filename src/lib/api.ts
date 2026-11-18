@@ -1,4 +1,4 @@
-import type { ChartResponse, QuotesResponse } from './types.ts';
+import type { ChartResponse, ClosesResponse, QuotesResponse } from './types.ts';
 import type { IntervalId, PeriodId } from './ranges.ts';
 
 export class ApiFailure extends Error {
@@ -35,4 +35,10 @@ export function fetchChart(symbol: string, period: PeriodId, interval: IntervalI
 export function fetchQuotes(symbols: string[], signal?: AbortSignal): Promise<QuotesResponse> {
   const q = new URLSearchParams({ symbols: symbols.join(',') });
   return getJson<QuotesResponse>(`/api/quotes?${q}`, signal);
+}
+
+/** Closing prices for up to 20 symbols in one request. */
+export function fetchCloses(symbols: string[], period: PeriodId, interval: IntervalId, signal?: AbortSignal): Promise<ClosesResponse> {
+  const q = new URLSearchParams({ symbols: symbols.join(','), range: period, interval });
+  return getJson<ClosesResponse>(`/api/closes?${q}`, signal);
 }

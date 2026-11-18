@@ -63,3 +63,15 @@ export function sessionFromIntraday(t: number, intraday: Candle[], lastPrice?: n
   // Intraday bars miss the opening and closing auctions, so prefer the day's reported total.
   return { t, o: intraday[0].o, h, l, c, v: dayVolume != null && dayVolume > 0 ? dayVolume : v };
 }
+
+/**
+ * Brings the last candle up to date with a newer price from the batched quotes poll, without
+ * fetching the chart again. Only moves a candle that is still forming (the price's time falls
+ * inside it); a price from a later candle waits for the chart's own, slower refresh.
+ */
+export function foldQuote(candles: Candle[], price: number | null | undefined, timeSec: number | null | undefined, stepSec: number): Candle[] {
+  if (!candles.length || price == null || timeSec == null) return candles;
+  const last = candles[candles.length - 1];
+  if (timeSec < last.t || timeSec >= last.t + stepSec || last.c === price) return candles;
+  return [...candles.slice(0, -1), { ...last, c: price, h: Math.max(last.h, price), l: Math.min(last.l, price) }];
+}

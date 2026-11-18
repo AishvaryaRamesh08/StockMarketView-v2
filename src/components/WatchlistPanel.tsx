@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { formatPct, formatPrice, digitsFor } from '../lib/format.ts';
 import { OVERLAY_BY_ID } from '../lib/overlays.ts';
-import type { PatternHit } from '../lib/patterns.ts';
+import type { Badge } from '../hooks/useWatchlistBadges.ts';
 import type { Quote } from '../lib/types.ts';
 import type { useWatchlists } from '../hooks/useWatchlists.ts';
 import { InfoTip } from './InfoTip.tsx';
@@ -10,7 +10,7 @@ import { Sparkline } from './Sparkline.tsx';
 interface Props {
   wl: ReturnType<typeof useWatchlists>;
   quotes: Record<string, Quote>;
-  patterns: Record<string, PatternHit | null>;
+  patterns: Record<string, Badge | undefined>;
   current: string;
   onSelect: (symbol: string) => void;
   onAdd: () => void;
@@ -122,7 +122,7 @@ export function WatchlistPanel({ wl, quotes, patterns, current, onSelect, onAdd,
                   <span className="wl-sym">
                     <span className="wl-ticker">{s.replace(/\.(NS|BO)$/, '').replace(/^\^/, '')}</span>
                     {def && (
-                      <InfoTip text={`${def.label} on the latest daily candle. ${def.info}`}>
+                      <InfoTip text={`${def.label} in the latest completed session (daily candles). ${def.info}`}>
                         <span className={`pattern-badge ${hit!.bias}`}>{hit!.bias === 'bullish' ? '▲' : '▼'} {def.label.replace(/^(Bullish|Bearish) /, '')}</span>
                       </InfoTip>
                     )}

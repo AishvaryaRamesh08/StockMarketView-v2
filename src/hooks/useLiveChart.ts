@@ -25,9 +25,10 @@ export interface LiveChart {
 
 /**
  * Loads full history once, then refreshes only the most recent candles every 30 seconds
- * while the symbol's market is open (every 5 minutes when it is closed).
+ * while the symbol's market is open (every 5 minutes when it is closed). `openPollMs` slows
+ * the open-market refresh, for views that keep the last candle current from batched quotes.
  */
-export function useLiveChart(symbol: string, period: PeriodId, interval: IntervalId): LiveChart {
+export function useLiveChart(symbol: string, period: PeriodId, interval: IntervalId, opts: { openPollMs?: number } = {}): LiveChart {
   const key = `${symbol}|${period}|${interval}`;
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<Omit<LiveChart, 'retry' | 'version' | 'marketOpen'> & { key: string }>({
@@ -88,7 +89,7 @@ export function useLiveChart(symbol: string, period: PeriodId, interval: Interva
       },
       [key, symbol, interval, period],
     ),
-    open ? LIVE_MS : CLOSED_MS,
+    open ? (opts.openPollMs ?? LIVE_MS) : CLOSED_MS,
     ready,
   );
 

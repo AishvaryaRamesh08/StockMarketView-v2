@@ -67,52 +67,52 @@ export function PatternsFeed({ feed, error, currency, onOpen }: Props) {
 
       {feed && hits.length === 0 && <p className="empty-note">No stocks matched this filter on the latest session.</p>}
       {feed && hits.length > 0 && (
-        <div className="pf-table" role="table" aria-label="Pattern hits">
-          <div className="pf-row pf-headrow" role="row">
-            <span role="columnheader">Stock</span>
-            <span role="columnheader">Pattern</span>
-            <span role="columnheader" className="num-col">
+        <div className="pf-table" role="group" aria-label="Pattern hits">
+          <div className="pf-row pf-headrow">
+            <span>Stock</span>
+            <span>Pattern</span>
+            <span className="num-col">
               Close
             </span>
-            <span role="columnheader" className="num-col">
+            <span className="num-col">
               Day
             </span>
-            <span role="columnheader" className="num-col">
+            <span className="num-col">
               <InfoTip text="Volume on the pattern candle compared with the 20-day average. Patterns on unusually high volume are generally taken more seriously.">
                 <span tabIndex={0} className="help">
                   Volume
                 </span>
               </InfoTip>
             </span>
-            <span role="columnheader" className="num-col">
+            <span className="num-col">
               RSI
             </span>
           </div>
           {shown.map((h) => {
             const def = OVERLAY_BY_ID.get(h.p)!;
             return (
-              <button key={`${h.s}-${h.p}`} className="pf-row" role="row" onClick={() => onOpen(h.s, h.p)}>
-                <span className="pf-stock" role="cell">
+              <button key={`${h.s}-${h.p}`} className="pf-row" onClick={() => onOpen(h.s, h.p)}>
+                <span className="pf-stock">
                   <b>{h.s.replace(/\.(NS|BO)$/, '')}</b>
                   <span>{h.n}</span>
                 </span>
-                <span role="cell">
+                <span>
                   <InfoTip text={def.info}>
                     <span className={`pattern-badge ${h.b}`}>
                       {h.b === 'bullish' ? '▲' : '▼'} {def.label}
                     </span>
                   </InfoTip>
                 </span>
-                <span className="num num-col" role="cell">
+                <span className="num num-col">
                   {formatPrice(h.c, currency, 2, false)}
                 </span>
-                <span className={`num num-col ${h.chg >= 0 ? 'up' : 'down'}`} role="cell">
+                <span className={`num num-col ${h.chg >= 0 ? 'up' : 'down'}`}>
                   {formatPct(h.chg)}
                 </span>
-                <span className={`num num-col ${h.vr != null && h.vr >= 1.5 ? 'strong' : ''}`} role="cell">
+                <span className={`num num-col ${h.vr != null && h.vr >= 1.5 ? 'strong' : ''}`}>
                   {h.vr != null ? `${h.vr.toFixed(1)}×` : '—'}
                 </span>
-                <span className="num num-col" role="cell">
+                <span className="num num-col">
                   {h.rsi ?? '—'}
                 </span>
               </button>

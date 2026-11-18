@@ -59,7 +59,7 @@ export function Welcome({ onClose, onGo, searchKey }: Props) {
         <h2 id="welcome-title">Welcome to StockMarketView</h2>
         <p className="welcome-lead">Free, live charts for Indian (NSE, BSE) and US stocks, refreshed every 30 seconds. No sign-up: everything you save stays in this browser.</p>
 
-        <p className="welcome-section">Three places to explore, using the tabs at the top</p>
+        <p className="welcome-section">Where would you like to start? You can switch any time with the tabs at the top</p>
         <div className="welcome-views">
           {VIEWS.map((v) => (
             <button key={v.id} className={`welcome-view v-${v.id}`} onClick={() => onGo(v.id)}>
@@ -93,7 +93,7 @@ export function Welcome({ onClose, onGo, searchKey }: Props) {
         <div className="welcome-foot">
           <span>For learning only. Nothing here is investment advice.</span>
           <button className="btn primary" onClick={onClose}>
-            Start exploring
+            Start with the chart
           </button>
         </div>
       </div>

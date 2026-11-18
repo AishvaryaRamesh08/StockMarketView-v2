@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyRefresh, diffTail, mergeCandles, sessionFromIntraday } from './candles.ts';
+import { applyRefresh, diffTail, foldQuote, mergeCandles, sessionFromIntraday } from './candles.ts';
 import { dailyPrevClose, foldLiveTick } from '../../server/api.ts';
 import type { Candle } from './types.ts';
 
@@ -108,5 +108,22 @@ describe('sessionFromIntraday', () => {
   });
   it('returns null without intraday data', () => {
     expect(sessionFromIntraday(0, [])).toBeNull();
+  });
+});
+
+describe('foldQuote', () => {
+  const bars: Candle[] = [
+    { t: 1000, o: 10, h: 11, l: 9, c: 10.5, v: 1 },
+    { t: 1900, o: 10.5, h: 10.8, l: 10.2, c: 10.6, v: 1 },
+  ];
+  it('moves the forming candle to the latest quote, widening its high or low', () => {
+    const out = foldQuote(bars, 11.2, 2000, 900);
+    expect(out[1]).toMatchObject({ c: 11.2, h: 11.2, l: 10.2 });
+    expect(out[0]).toBe(bars[0]);
+  });
+  it('leaves the series alone when the quote belongs to a later candle or is older', () => {
+    expect(foldQuote(bars, 11.2, 1900 + 900, 900)).toBe(bars);
+    expect(foldQuote(bars, 11.2, 1500, 900)).toBe(bars);
+    expect(foldQuote(bars, null, 2000, 900)).toBe(bars);
   });
 });

@@ -5,8 +5,8 @@ Free live stock charts for India (NSE, BSE) and the US (NYSE, NASDAQ). No sign-u
 **Live site: https://stockmarketview.aishvaryaramesh.workers.dev**
 
 This is a rebuild of [StockMarketView v1](https://github.com/AishvaryaRamesh08/StockMarketView) (2021, Python Dash + Plotly + TA-Lib),
-which I wrote by hand during my undergrad degree. v2 is being built with AI-assisted development; a v1-vs-v2 comparison will be
-added when the build is complete.
+which I wrote by hand during my undergrad degree. v2 was built with AI-assisted development (Claude Code); the
+[comparison below](#v1-vs-v2) shows what changed.
 
 ## Status
 
@@ -18,7 +18,76 @@ added when the build is complete.
 | 4 | Drawing tools, PNG export, shareable URLs | **Done** |
 | 5 | Paper trading | **Done** |
 | 6 | Gemini chatbot (bring your own key), text then voice | **Done** |
-| 7 | Visual polish, mobile and performance passes, v1-vs-v2 write-up | Next |
+| 7 | Visual polish, mobile and performance passes, v1-vs-v2 write-up | **Done** |
+
+## v1 vs v2
+
+| v1 (2021) | v2 (2026) |
+|---|---|
+| ![v1: NIFTY 50 daily chart in Dash and Plotly](media/v1-chart.png) | ![v2: Reliance daily chart with moving averages, engulfing markers and RSI](media/v2-chart.png) |
+
+| v2 Markets page | Pattern track record | What if you had invested | Replay | Phone |
+|---|---|---|---|---|
+| ![Markets](media/v2-markets.png) | ![Track record](media/v2-track-record.png) | ![What if](media/v2-whatif.png) | ![Replay](media/v2-replay.png) | ![Phone](media/v2-phone.png) |
+
+### Measured
+
+Both versions measured on the same laptop on 17 Nov 2026: v1 running locally (its code unchanged, on current Dash),
+v2's production build running locally in Cloudflare's own runtime (`wrangler dev`). Lighthouse 12, cold load;
+"mobile" is Lighthouse's simulated mid-range phone on slow 4G. The Markets page's mobile score varied between 84 and 96
+across runs, depending on which data arrived first. v1's original Heroku address no longer exists
+(Heroku ended its free plan in 2022), so it could not be measured online.
+
+| | v1 | v2 Markets page | v2 Chart page |
+|---|---:|---:|---:|
+| Lighthouse performance, mobile | 38 | 96 | 91 |
+| Lighthouse performance, desktop | 59 | 99 | 99 |
+| Accessibility / Best practices / SEO | 86 / 100 / 82 | 100 / 100 / 100 | 100 / 100 / 100 |
+| First contentful paint, mobile | 8.6 s | 1.9 s | 2.5 s |
+| Largest contentful paint, mobile | 40.0 s | 2.5 s | 2.9 s |
+| Page weight (cold load) | 7.3 MB | 0.2 MB | 0.2–0.3 MB |
+| Requests every minute while a market is open | 2 full re-renders of each chart (about 25 KB each for one year of daily candles); the server re-downloads the whole history from Yahoo for every visitor | about 2.5 small requests (one batched quote request every 30 s, gainers and losers every 2 minutes), shared through an edge cache | about 4 small requests (the newest candles and one batched quote request, every 30 s), shared through a 20-second edge cache |
+| Hosting | Heroku (paid since 2022) | Cloudflare Workers free plan | |
+| Code | 1,085 lines of Python in two files | 16,379 lines of TypeScript and CSS, plus 1,540 lines of tests (185 tests) | |
+
+### Features
+
+| | v1 | v2 |
+|---|---|---|
+| Markets | NSE and BSE | NSE, BSE, NYSE and NASDAQ |
+| Live updates | Re-downloads everything every 30 s | Only the newest candles every 30 s, while the market is open |
+| Indicators | 4 SMAs, EMA 9, Bollinger Bands, Parabolic SAR | 12 indicators incl. Ichimoku, VWAP, RSI and MACD in their own panels |
+| Candlestick patterns | Engulfing | 9 patterns, each with its 10-year track record on the stock |
+| Compare, multi-timeframe | Yes | Yes, with synced crosshairs |
+| Explanations | No | Plain-English summary, hover explanations everywhere, welcome guide |
+| Market overview | No | Markets page: indices, breadth, gainers and losers, market news, daily pattern scan |
+| Drawing, image export, share links | No | Yes |
+| Watchlists | No | Yes |
+| Paper trading | No | Virtual ₹ and $ accounts, P&L by stock and day, replay practice |
+| Investing calculator | No | SIP and lump-sum "what if", against the index and a fixed deposit |
+| Chatbot | Separate Rasa bot with fixed answers | Ask AI (Gemini, your own key): draws charts from text or voice, explains, reviews your paper portfolio |
+| Machine learning | A random-forest experiment (`ml_randForest.py`) | Not carried over: the site describes the past, it doesn't predict |
+| Phones | Desktop layout only | Designed for phones too, including touch drawing |
+
+### What AI did and what I decided
+
+**What the AI did:** proposed the plan and the hosting setup, wrote all of the code, tests and documentation, tested
+every phase in a browser at desktop and phone sizes, measured performance, and found and fixed bugs before I saw them,
+for example: Yahoo sending today's NSE candle empty (which made "previous close" wrong), a cancelled request that could
+blank the page, queued paper orders that didn't set cash aside, a replay mode that let you trade with hindsight, and
+headline matching that mistook "Nasdaq" the index for Nasdaq the company. It also cross-checked the pattern rules
+against TA-Lib ([results](scripts/talib-check/README.md)).
+
+**What I decided:**
+- That it had to be free to run and free to use, live within 30 seconds, for both India and the US, in English.
+- Which features to build from the AI's suggestions: plain-English summaries and explanations, key levels and
+  fundamentals, the Markets page, daily pattern scans, similar stocks, paper trading, a bring-your-own-key Gemini
+  chatbot with voice, and later the pattern track record, replay mode and the SIP calculator.
+- Layout and product calls after using each phase: making the chart the focus of the page, a maximize mode, a
+  prominent Paper trade button, a first-visit guide that stays up to date, replacing the heatmap with gainers, losers
+  and market news (fewer requests and more useful), a faster default Gemini model after slow replies, P&L views for
+  the paper portfolio, and an AI portfolio review that describes but never recommends.
+- What reached the live site: every phase was reviewed locally before I approved deploying it.
 
 ## Features so far
 
@@ -32,7 +101,7 @@ added when the build is complete.
 - **Compare** up to 4 stocks or indices as % change.
 - **Multi-timeframe**: three charts of the same stock with synced crosshairs.
 - **Watchlists**: multiple named lists with live prices, sparklines and pattern badges.
-- **Markets page** (the landing page): India/US toggle, index cards, market breadth, and the NIFTY 500 / S&P 500
+- **Markets page**: India/US toggle, index cards, market breadth, and the NIFTY 500 / S&P 500
   top gainers and losers, refreshed every 2 minutes while the market is open.
 - **Market news**: the latest headlines beside the movers, each with a short snippet and a link to the full
   article on the publisher's site (nothing is copied or stored). India: The Economic Times and Mint; US: Yahoo
@@ -79,7 +148,8 @@ added when the build is complete.
 - **Maximize** (F): only the top bar, chart controls and chart.
 - **Appearance**: dark and light themes, plus a colour-blind-friendly blue/orange palette for up/down.
 - **Command palette** (Cmd/Ctrl+K): search stocks, or type a command such as "light theme", "show RSI" or "go to markets".
-- **Remembers your setup**: last view, stock, timeframe, indicators, layout and appearance.
+- **Starts on the chart, remembers your setup**: every visit opens the Chart tab with your last stock, timeframe,
+  indicators, layout and appearance. A first-time visitor can choose Markets or Portfolio from the welcome guide instead.
 
 Upcoming earnings dates are not shown: Yahoo only serves them to logged-in sessions.
 
@@ -100,6 +170,19 @@ Yahoo Finance chart + spark endpoints
   and updates only the last candles in place. v1 re-downloaded everything every 30 seconds.
 - **Batched quotes:** the index strip and the current stock's day change come from one `/api/quotes` request.
 - **Polls only when useful:** every 30s while the stock's market is open, every 5 minutes when closed, and not at all while the tab is hidden.
+- **Request budget:** one open tab stays under about 6 requests a minute while a market is open. Lists are always
+  batched (quotes 20 per request, comparisons in one request), never one request per stock.
+
+  | Page | Requests a minute (market open) |
+  |---|---|
+  | Chart | 4: newest candles every 30 s, one batched quote request every 30 s |
+  | Chart with comparisons | 5: plus one batched request for all compared stocks every minute |
+  | Multi-timeframe | about 4: each pane refreshes every minute (daily panes every 5 minutes), and the batched quotes keep each pane's last candle current in between |
+  | Markets | about 2.5: batched quotes every 30 s, gainers and losers every 2 minutes, news hourly |
+  | Watchlist badges | read from the daily pattern scan, one cached request per market every 15 minutes |
+
+  A very long watchlist (more than about 13 stocks alongside the indices and similar stocks) needs a second quote
+  batch, adding 2 a minute.
 - **Search index** (`public/symbols.json`, 18.8k symbols, about 240 KB gzipped) loads only when search is first opened.
 - **No accounts or database.** Preferences are kept in the visitor's browser.
 - **Market-wide data**: `/api/pulse` prices all ~500 stocks of a market in 25 batched calls, cached for 2 minutes.

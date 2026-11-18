@@ -12,8 +12,10 @@
   --border-strong: #2f3848;
   --text-1: #e8ecf3;
   --text-2: #9aa4b5;
-  --text-3: #677184;
+  --text-3: #8790a3;
   --accent: #5b8cff;
+  /* Filled buttons and tabs with white text: dark enough for 4.5:1 contrast. */
+  --accent-fill: #3d6be0;
   --accent-soft: rgba(91, 140, 255, 0.14);
   --grid: rgba(154, 164, 181, 0.07);
   --crosshair: rgba(154, 164, 181, 0.45);
@@ -45,8 +47,9 @@
   --border-strong: #c6ccd7;
   --text-1: #141922;
   --text-2: #4a5466;
-  --text-3: #788296;
+  --text-3: #626c80;
   --accent: #2f6bff;
+  --accent-fill: #2a5fe6;
   --accent-soft: rgba(47, 107, 255, 0.12);
   --grid: rgba(20, 25, 34, 0.06);
   --crosshair: rgba(20, 25, 34, 0.4);
@@ -575,7 +578,7 @@ kbd {
 }
 
 .chip.active {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
 }
 
@@ -677,7 +680,7 @@ kbd {
 }
 
 .btn.primary {
-  background: var(--accent);
+  background: var(--accent-fill);
   border-color: var(--accent);
   color: #fff;
 }
@@ -1265,7 +1268,7 @@ kbd {
   height: 18px;
   padding: 0 5px;
   border-radius: 9px;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
   font-size: 11px;
   display: inline-flex;
@@ -1296,7 +1299,7 @@ kbd {
 }
 
 .segmented button.active {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
 }
 
@@ -2357,7 +2360,7 @@ button.pf-row:hover {
 }
 
 .icon-btn.pressed {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
 }
 
@@ -2707,7 +2710,7 @@ button.pf-row:hover {
 }
 
 .trade-btn.pressed {
-  background: var(--accent);
+  background: var(--accent-fill);
   border-color: var(--accent);
   color: #fff;
 }
@@ -3071,7 +3074,7 @@ button.pt-row:hover {
 /* ------------------------------------------------------------- trade button
    The one call to action on the page: filled and coloured unlike every other control. */
 .tool-btn.trade-btn {
-  background: linear-gradient(135deg, var(--accent), #8a63ff);
+  background: linear-gradient(135deg, var(--accent-fill), #7650e8);
   border-color: transparent;
   color: #fff;
   font-weight: 650;
@@ -3080,7 +3083,7 @@ button.pt-row:hover {
 }
 
 .tool-btn.trade-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--accent), #8a63ff);
+  background: linear-gradient(135deg, var(--accent-fill), #7650e8);
   border-color: transparent;
   filter: brightness(1.1);
 }
@@ -3113,13 +3116,13 @@ button.pt-row:hover {
 }
 
 .view-tabs button.active {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
   box-shadow: 0 2px 8px rgba(70, 110, 255, 0.3);
 }
 
 .view-tabs button.active .view-sym {
-  color: rgba(255, 255, 255, 0.75);
+  color: #fff;
 }
 
 .view-tabs button:not(.active):hover {
@@ -3518,7 +3521,7 @@ button.pt-row:hover {
 }
 
 .actions-row .focus-btn.pressed {
-  background: var(--accent);
+  background: var(--accent-fill);
   border-color: var(--accent);
   color: #fff;
 }
@@ -3666,7 +3669,7 @@ button.pt-row:hover {
 }
 
 .ask-ai-btn.pressed {
-  background: linear-gradient(135deg, var(--accent), #8a63ff);
+  background: linear-gradient(135deg, var(--accent-fill), #7650e8);
   border-color: transparent;
   color: #fff;
 }
@@ -3742,7 +3745,7 @@ button.pt-row:hover {
 
 .chat-msg.user {
   align-self: flex-end;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
   border-bottom-right-radius: 4px;
   white-space: pre-wrap;
@@ -3878,7 +3881,7 @@ button.pt-row:hover {
 }
 
 .send-btn:not(:disabled) {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
 }
 
@@ -4716,7 +4719,7 @@ button.pt-row:hover {
 }
 
 .rp-play {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
 }
 
@@ -4790,5 +4793,103 @@ button.pt-row:hover {
 
   .rp-hint {
     display: none;
+  }
+}
+
+/* Placeholders the same size as the loaded cards, so the Markets page doesn't jump (layout shift). */
+.index-card.skeleton {
+  min-height: 82px;
+}
+
+@media (max-width: 860px) {
+  .index-card.skeleton {
+    min-height: 104px;
+  }
+}
+
+/* Loading placeholders as tall as what replaces them, so the chart doesn't jump down (layout shift). */
+.quote-header.loading {
+  min-height: 62px;
+}
+
+@container workspace (max-width: 1100px) {
+  .quote-header.loading {
+    min-height: 111px;
+  }
+}
+
+@container workspace (max-width: 620px) {
+  .quote-header.loading {
+    min-height: 267px;
+  }
+}
+
+.news .card-sub {
+  min-height: 2.9em;
+}
+
+/* ================================================================ Phase 7: phone layout */
+@media (max-width: 520px) {
+  /* Top bar in two short rows: icons and market dots, then the tabs with a search icon. */
+  .topbar {
+    gap: 8px 8px;
+    padding: 8px 12px;
+  }
+
+  .topbar-status {
+    margin-left: auto;
+  }
+
+  .topbar .status-label,
+  .topbar .status-next {
+    display: none;
+  }
+
+  .view-tabs {
+    order: 2;
+    flex: 1;
+  }
+
+  .view-tabs button {
+    flex: 1;
+    justify-content: center;
+    padding: 6px 8px;
+  }
+
+  .search-trigger {
+    order: 2;
+    flex: 0 0 auto;
+    flex-basis: auto;
+    min-width: 0;
+    max-width: none;
+    padding: 8px 10px;
+  }
+
+  .search-trigger span,
+  .search-trigger kbd {
+    display: none;
+  }
+}
+
+@container workspace (max-width: 620px) {
+  /* Key stats on one swipeable line, so the chart starts higher up the screen. */
+  .quote-stats {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    gap: 4px 18px;
+    padding-bottom: 2px;
+  }
+
+  .quote-stats::-webkit-scrollbar {
+    display: none;
+  }
+
+  .quote-stats div {
+    flex: none;
+  }
+
+  .quote-header.loading {
+    min-height: 204px;
   }
 }

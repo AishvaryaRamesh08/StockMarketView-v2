@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppearanceMenu } from './components/AppearanceMenu.tsx';
 import { ChartActions, TextNoteInput } from './components/ChartActions.tsx';
 import { ChartSummary, GlanceToggle } from './components/ChartSummary.tsx';
@@ -8,29 +8,33 @@ import { ChartToolbar } from './components/ChartToolbar.tsx';
 import { IndexStrip, STRIP_INDICES } from './components/IndexStrip.tsx';
 import { InfoTip } from './components/InfoTip.tsx';
 import { MarketPulse } from './components/MarketPulse.tsx';
-import { Portfolio } from './components/Portfolio.tsx';
 import { TradePanel } from './components/TradePanel.tsx';
-import { ChatPanel } from './components/ChatPanel.tsx';
 import { useChat } from './hooks/useChat.ts';
 import { useChatTools } from './hooks/useChatTools.ts';
 import type { TradeLine, TradeMark } from './components/PriceChart.tsx';
 import { MarketStatusPill } from './components/MarketStatusPills.tsx';
-import { DEFAULT_FRAMES, MultiTimeframe, type Frame } from './components/MultiTimeframe.tsx';
+import { DEFAULT_FRAMES, type Frame } from './lib/frames.ts';
+
+// Loaded on demand, so the Markets landing page doesn't download the chart library or panels it doesn't show.
+const PriceChart = lazy(() => import('./components/PriceChart.tsx').then((m) => ({ default: m.PriceChart })));
+const MultiTimeframe = lazy(() => import('./components/MultiTimeframe.tsx').then((m) => ({ default: m.MultiTimeframe })));
+const Portfolio = lazy(() => import('./components/Portfolio.tsx').then((m) => ({ default: m.Portfolio })));
+const ChatPanel = lazy(() => import('./components/ChatPanel.tsx').then((m) => ({ default: m.ChatPanel })));
+const PatternTrackRecord = lazy(() => import('./components/PatternTrackRecord.tsx').then((m) => ({ default: m.PatternTrackRecord })));
+const WhatIf = lazy(() => import('./components/WhatIf.tsx').then((m) => ({ default: m.WhatIf })));
+const ReplayBar = lazy(() => import('./components/ReplayBar.tsx').then((m) => ({ default: m.ReplayBar })));
+const Welcome = lazy(() => import('./components/Welcome.tsx').then((m) => ({ default: m.Welcome })));
 import { ActiveOverlays, OverlayMenu } from './components/OverlayMenu.tsx';
-import { PriceChart } from './components/PriceChart.tsx';
 import { QuoteHeader } from './components/QuoteHeader.tsx';
 import { SearchPalette, rememberRecent, type PaletteAction, type SearchMode } from './components/SearchPalette.tsx';
 import { SimilarStocks } from './components/SimilarStocks.tsx';
-import { PatternTrackRecord } from './components/PatternTrackRecord.tsx';
-import { WhatIf } from './components/WhatIf.tsx';
-import { ReplayBar } from './components/ReplayBar.tsx';
 import { useReplay } from './hooks/useReplay.ts';
 import { WatchlistPanel } from './components/WatchlistPanel.tsx';
-import { Welcome } from './components/Welcome.tsx';
 import { useFillHeight } from './hooks/useFillHeight.ts';
 import { useStickyPanels } from './hooks/useStickyPanels.ts';
 import { MAX_COMPARE, useCompare } from './hooks/useCompare.ts';
-import { useDailyPatterns } from './hooks/useDailyPatterns.ts';
+import { useWatchlistBadges } from './hooks/useWatchlistBadges.ts';
+import { createSiteActions } from './lib/siteActions.ts';
 import { useDrawings } from './hooks/useDrawings.ts';
 import { usePaper } from './hooks/usePaper.ts';
 import { openOrders, positionOf, type Order } from './lib/paper.ts';
@@ -98,8 +102,9 @@ const DEFAULT_PREFS: Prefs = {
   layout: 'single',
   frames: DEFAULT_FRAMES,
   sidebar: true,
-  // First-time visitors land on the market overview, not an arbitrary stock.
-  view: 'markets',
+  // Every visit starts on the chart. A first-time visitor can pick Markets or Portfolio from the
+  // welcome guide instead; a link that names a page (?v=markets) opens that page.
+  view: 'chart',
   pulseMarket: inIndia() ? 'IN' : 'US',
   portfolioMarket: inIndia() ? 'IN' : 'US',
   tradeOpen: false,
@@ -119,7 +124,7 @@ function loadPrefs(): Prefs {
   if (raw.layout === 'single' || raw.layout === 'multi') p.layout = raw.layout;
   if (Array.isArray(raw.frames) && raw.frames.length === 3 && raw.frames.every((f) => isPeriodId(f?.period) && isIntervalId(f?.interval))) p.frames = raw.frames as Frame[];
   if (typeof raw.sidebar === 'boolean') p.sidebar = raw.sidebar;
-  if (raw.view === 'markets' || raw.view === 'chart' || raw.view === 'portfolio') p.view = raw.view;
+  // The last-used tab is deliberately not restored: returning visitors also start on the chart.
   if (isMarketId(raw.portfolioMarket)) p.portfolioMarket = raw.portfolioMarket;
   if (typeof raw.tradeOpen === 'boolean') p.tradeOpen = raw.tradeOpen;
   if (typeof raw.glance === 'boolean') p.glance = raw.glance;
@@ -158,6 +163,8 @@ const isNarrow = () => typeof window !== 'undefined' && window.matchMedia('(max-
 
 export function App() {
   const [prefs, setPrefs] = useState<Prefs>(() => applyLink(loadPrefs(), decodeLink(window.location.search)));
+  const prefsRef = useRef(prefs);
+  prefsRef.current = prefs;
   const [search, setSearch] = useState<SearchMode | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const { symbol, period, interval, layout } = prefs;
@@ -254,7 +261,7 @@ export function App() {
     if (pos) lines.push({ price: pos.avgCost, kind: 'avg', title: `Avg cost (${pos.qty})` });
     return lines;
   }, [paper.state, symbol]);
-  const badges = useDailyPatterns(wl.active.symbols);
+  const badges = useWatchlistBadges(wl.active.symbols);
 
   // Prefer the batched quote for day change (always against yesterday's close).
   const live = quotes[symbol];
@@ -268,14 +275,12 @@ export function App() {
     return { ...c, ...newer, name: c.name, exchange: c.exchange || live.exchange, prevClose, change, changePct: change != null && prevClose ? (change / prevClose) * 100 : null };
   }, [chart.quote, live]);
 
+  // Screen changes shared by the command palette and Ask AI.
+  const siteActions = useMemo(() => createSiteActions((patch) => setPrefs((p) => ({ ...p, ...patch })), rememberRecent, MAX_COMPARE), []);
   const chatTools = useChatTools({
     prefs,
     name: quote?.name,
-    update: (patch) => update(patch),
-    selectSymbol: (sym) => {
-      rememberRecent(sym);
-      update((p) => ({ symbol: sym, compare: p.compare.filter((c) => c !== sym) }));
-    },
+    actions: siteActions,
     watchlist: { name: wl.active.name, symbols: wl.active.symbols, toggle: wl.toggle },
     maxCompare: MAX_COMPARE,
     portfolio: { state: paper.state, prices: paper.prices, quotes },
@@ -300,11 +305,10 @@ export function App() {
   const update = useCallback((patch: Partial<Prefs> | ((p: Prefs) => Partial<Prefs>)) => setPrefs((p) => ({ ...p, ...(typeof patch === 'function' ? patch(p) : patch) })), []);
   const selectSymbol = useCallback(
     (s: string) => {
-      rememberRecent(s);
-      update((p) => ({ symbol: s, view: 'chart', compare: p.compare.filter((c) => c !== s) }));
+      siteActions.openChart(prefsRef.current, s);
       setSheetOpen(false);
     },
-    [update],
+    [siteActions],
   );
   const setPeriod = useCallback((p: PeriodId) => update((x) => ({ period: p, interval: intervalForPeriod(p, x.interval) })), [update]);
   const setInterval = useCallback((i: IntervalId) => update((x) => ({ interval: i, period: periodForInterval(i, x.period) })), [update]);
@@ -326,7 +330,7 @@ export function App() {
   );
 
   const onSearchSelect = (s: string) => {
-    if (search === 'compare') update((p) => ({ compare: s === p.symbol || p.compare.includes(s) ? p.compare : [...p.compare, s].slice(0, MAX_COMPARE) }));
+    if (search === 'compare') siteActions.setCompare(prefs, [...prefs.compare, s]);
     else if (search === 'watchlist') {
       if (!wl.active.symbols.includes(s)) wl.toggle(s);
     } else selectSymbol(s);
@@ -395,7 +399,7 @@ export function App() {
   const appearance = useAppearance();
   const actions: PaletteAction[] = useMemo(
     () => [
-      { id: 'view-markets', label: 'Go to Markets', keywords: 'pulse movers gainers losers news headlines home overview', run: () => update({ view: 'markets' }) },
+      { id: 'view-markets', label: 'Go to Markets', keywords: 'pulse movers gainers losers news headlines home overview', run: () => siteActions.openMarkets() },
       { id: 'view-chart', label: 'Go to Chart', keywords: 'candles', run: () => update({ view: 'chart' }) },
       { id: 'view-portfolio', label: 'Go to Portfolio', keywords: 'paper trading holdings positions p&l account', run: () => update({ view: 'portfolio' }) },
       { id: 'replay', label: replayOn ? 'Exit replay' : `Replay ${symbol.replace(/\.(NS|BO)$/, '')} candle by candle`, keywords: 'replay practice backtest history past step', run: () => { update({ view: 'chart', layout: 'single' }); setReplayOn((v) => !v); } },
@@ -403,8 +407,8 @@ export function App() {
       { id: 'focus', label: focus ? 'Exit full-screen chart' : 'Maximize chart', keywords: 'full screen fullscreen focus expand zoom', run: () => { update({ view: 'chart' }); setFocus((f) => !f); } },
       { id: 'trade', label: prefs.tradeOpen && prefs.sideTab === 'trade' ? 'Close trade panel' : `Paper trade ${symbol}`, keywords: 'buy sell order ticket paper', run: () => update((p) => ({ view: 'chart', tradeOpen: !(p.tradeOpen && p.sideTab === 'trade'), sideTab: 'trade' })) },
       { id: 'chat', label: 'Ask AI (chat with your charts)', keywords: 'chat gemini ai assistant bot voice question help', run: () => update({ tradeOpen: true, sideTab: 'chat' }) },
-      { id: 'market-in', label: 'Markets: show India', keywords: 'nifty nse', run: () => update({ view: 'markets', pulseMarket: 'IN' }) },
-      { id: 'market-us', label: 'Markets: show US', keywords: 's&p nasdaq nyse', run: () => update({ view: 'markets', pulseMarket: 'US' }) },
+      { id: 'market-in', label: 'Markets: show India', keywords: 'nifty nse', run: () => siteActions.openMarkets('IN') },
+      { id: 'market-us', label: 'Markets: show US', keywords: 's&p nasdaq nyse', run: () => siteActions.openMarkets('US') },
       appearance.theme === 'dark'
         ? { id: 'theme', label: 'Switch to light theme', keywords: 'appearance mode white', run: () => setAppearance({ theme: 'light' }) }
         : { id: 'theme', label: 'Switch to dark theme', keywords: 'appearance mode black night', run: () => setAppearance({ theme: 'dark' }) },
@@ -422,13 +426,10 @@ export function App() {
         id: `ov-${o.id}`,
         label: `${prefs.overlays.includes(o.id) ? 'Hide' : 'Show'} ${o.label}`,
         keywords: `${o.group} indicator pattern toggle add remove`,
-        run: () => {
-          toggleOverlay(o.id);
-          update({ view: 'chart' });
-        },
+        run: () => siteActions.setOverlay(prefs, o.id, !prefs.overlays.includes(o.id)),
       })),
     ],
-    [appearance, prefs.layout, prefs.sidebar, prefs.overlays, prefs.tradeOpen, prefs.sideTab, focus, replayOn, symbol, watched, wl, update, toggleOverlay],
+    [appearance, prefs, focus, replayOn, symbol, watched, wl, update, siteActions],
   );
 
   /* ------------------------------ image + share ------------------------------ */
@@ -582,7 +583,7 @@ export function App() {
           </button>
         </nav>
 
-        <button className="search-trigger" onClick={() => setSearch('chart')}>
+        <button className="search-trigger" onClick={() => setSearch('chart')} aria-label="Search India &amp; US stocks" title="Search ('/')">
           <svg viewBox="0 0 24 24" aria-hidden>
             <circle cx="11" cy="11" r="7" />
             <path d="m20 20-3.5-3.5" />
@@ -623,6 +624,7 @@ export function App() {
           </main>
         ) : prefs.view === 'portfolio' ? (
           <main className="workspace">
+            <Suspense fallback={<div className="skeleton" style={{ height: 320 }} />}>
             <Portfolio
               market={prefs.portfolioMarket}
               onMarket={(m) => update({ portfolioMarket: m })}
@@ -635,10 +637,12 @@ export function App() {
                 if (chat.hasKey && !chat.busy) chat.send(`Analyse my ${m === 'IN' ? 'India (₹)' : 'US ($)'} paper portfolio: what's doing well and what isn't?`);
               }}
             />
+            </Suspense>
           </main>
         ) : (
         <main className="workspace">
           {replay && (
+            <Suspense fallback={null}>
             <ReplayBar
               r={replay}
               name={quote?.name ?? symbol}
@@ -647,6 +651,7 @@ export function App() {
               currency={quote?.currency ?? (marketOf(symbol) === 'IN' ? 'INR' : 'USD')}
               onExit={() => setReplayOn(false)}
             />
+            </Suspense>
           )}
           {!focusMode && !replay && (
             <>
@@ -800,9 +805,12 @@ export function App() {
           )}
 
           {layout === 'multi' ? (
-            <MultiTimeframe symbol={symbol} frames={prefs.frames} overlays={overlays} onFramesChange={(frames) => update({ frames })} />
+            <Suspense fallback={<div className="chart-skeleton skeleton" style={{ height: 420, position: 'relative' }} />}>
+              <MultiTimeframe symbol={symbol} frames={prefs.frames} overlays={overlays} quote={quotes[symbol] ?? null} onFramesChange={(frames) => update({ frames })} />
+            </Suspense>
           ) : (
             <section className="chart-panel" aria-label="Price chart" ref={chartPanel}>
+              <Suspense fallback={<div className="chart-skeleton skeleton" aria-label="Loading chart" />}>
               {replay ? (
                 replay.status === 'ready' ? (
                   <PriceChart
@@ -877,6 +885,7 @@ export function App() {
                   {textReq && <TextNoteInput key={`${textReq.x},${textReq.y}`} x={textReq.x} y={textReq.y} initial={textReq.initial} onSave={saveNote} onCancel={() => setTextReq(null)} />}
                 </>
               )}
+              </Suspense>
             </section>
           )}
 
@@ -893,10 +902,10 @@ export function App() {
           )}
 
           {layout === 'single' && !focusMode && (
-            <>
+            <Suspense fallback={null}>
               <PatternTrackRecord symbol={symbol} active={overlays} onShow={(id) => !overlays.has(id) && toggleOverlay(id)} />
               <WhatIf key={symbol} symbol={symbol} currency={quote?.currency ?? (marketOf(symbol) === 'IN' ? 'INR' : 'USD')} />
-            </>
+            </Suspense>
           )}
         </main>
         )}
@@ -929,7 +938,9 @@ export function App() {
                   onOpenPortfolio={() => update({ view: 'portfolio', portfolioMarket: marketOf(symbol) })}
                 />
               ) : (
-                <ChatPanel chat={chat} />
+                <Suspense fallback={null}>
+                  <ChatPanel chat={chat} />
+                </Suspense>
               )}
             </div>
           </div>
@@ -957,6 +968,7 @@ export function App() {
       )}
 
       {welcome && (
+        <Suspense fallback={null}>
         <Welcome
           searchKey={`${isMac ? '⌘' : 'Ctrl'} K`}
           onClose={closeWelcome}
@@ -965,6 +977,7 @@ export function App() {
             update({ view });
           }}
         />
+        </Suspense>
       )}
 
       <SearchPalette open={search != null} actions={actions} mode={search ?? 'chart'} context={search === 'watchlist' ? wl.active.name : undefined} onClose={() => setSearch(null)} onSelect={onSearchSelect} />

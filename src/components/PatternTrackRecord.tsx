@@ -43,8 +43,8 @@ export function PatternTrackRecord({ symbol, active, onShow }: { symbol: string;
           <p className="tr-base">
             For comparison: on any day, {ticker} was higher {horizon} days later <b className="num">{Math.round(tr.baseUpPct ?? 0)}%</b> of the time (average move <b className="num">{formatPct(tr.baseAvgPct)}</b>). A pattern only tells you something if it beats that.
           </p>
-          <div className="pt-table" role="table" aria-label="Pattern track record">
-            <div className="pt-row tr-row pt-head" role="row">
+          <div className="pt-table" role="group" aria-label="Pattern track record">
+            <div className="pt-row tr-row pt-head">
               <span>Pattern</span>
               <span className="num-col">Times</span>
               <span>
@@ -64,7 +64,7 @@ export function PatternTrackRecord({ symbol, active, onShow }: { symbol: string;
               const base = r.bias === 'bearish' ? 100 - (tr.baseUpPct ?? 50) : (tr.baseUpPct ?? 50);
               const on = active.has(r.pattern);
               return (
-                <div key={r.pattern} className="pt-row tr-row" role="row">
+                <div key={r.pattern} className="pt-row tr-row">
                   <span className="tr-name">
                     <span className="swatch" style={{ background: def.color }} />
                     <span>

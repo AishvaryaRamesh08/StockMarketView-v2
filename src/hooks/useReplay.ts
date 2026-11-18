@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { loadHistory } from './useHistory.ts';
-import { replayRange, replayStart, type ReplayAccount, buyIn, sellOut, newAccount } from '../lib/replay.ts';
+import { replayRange, replayStart, type ReplayAccount, buyIn, sellOut, newAccount, stepPosition, canTradeAt } from '../lib/replay.ts';
 import type { IntervalId } from '../lib/ranges.ts';
 import type { Candle, MarketId } from '../lib/types.ts';
 import { startIndex } from '../lib/whatIf.ts';
@@ -75,7 +75,7 @@ export function useReplay(symbol: string, interval: IntervalId, market: MarketId
   // what happened next, step back and trade on it.
   const [maxPos, setMaxPos] = useState(0);
   useEffect(() => setMaxPos((m) => Math.max(m, pos)), [pos]);
-  const step = useCallback((k: number) => setPos((p) => Math.max(startPos, Math.min(n - 1, p + k))), [n, startPos]);
+  const step = useCallback((k: number) => setPos((p) => stepPosition(p, k, startPos, n)), [n, startPos]);
 
   // Playing: one candle per tick until the data runs out.
   const tick = useRef(step);
@@ -95,7 +95,7 @@ export function useReplay(symbol: string, interval: IntervalId, market: MarketId
   if (!active) return null;
   return {
     canStepBack: pos > startPos,
-    canTrade: pos >= maxPos,
+    canTrade: canTradeAt(pos, maxPos),
     toLatest: () => setPos(maxPos),
     status: data.error && data.key === key ? 'error' : candles ? 'ready' : 'loading',
     error: data.key === key ? data.error : null,
@@ -124,7 +124,7 @@ export function useReplay(symbol: string, interval: IntervalId, market: MarketId
     },
     buy: (qty: number) => {
       if (!current) return 'No price yet';
-      if (pos < maxPos) return 'Go back to the latest candle to trade';
+      if (!canTradeAt(pos, maxPos)) return 'Go back to the latest candle to trade';
       const r = buyIn(account, qty, current.c, current.t);
       if (typeof r === 'string') return r;
       setAccount(r);
@@ -132,7 +132,7 @@ export function useReplay(symbol: string, interval: IntervalId, market: MarketId
     },
     sell: (qty: number) => {
       if (!current) return 'No price yet';
-      if (pos < maxPos) return 'Go back to the latest candle to trade';
+      if (!canTradeAt(pos, maxPos)) return 'Go back to the latest candle to trade';
       const r = sellOut(account, qty, current.c, current.t);
       if (typeof r === 'string') return r;
       setAccount(r);
