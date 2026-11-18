@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fixedDeposit, lumpSum, monthlyDates, planDates, sip, startIndex, xirr } from './whatIf.ts';
+import { availableYears, fixedDeposit, lumpSum, monthlyDates, planDates, sip, startIndex, xirr } from './whatIf.ts';
 import type { Candle } from './types.ts';
 
 const DAY = 86400;
@@ -62,5 +62,18 @@ describe('xirr and fixed deposit', () => {
     expect(planDates('lump', cs, T0)).toEqual([T0]);
     expect(planDates('sip', cs, T0)).toHaveLength(3);
     expect(startIndex(cs, T0 + 0.5 * DAY)).toBe(1);
+  });
+});
+
+describe('available years', () => {
+  it('counts a 10-year download that ends just short of ten years as ten (the 10Y button)', () => {
+    // Real INFY.NS range=10y: 18 Nov 2016 to 18 Nov 2026, 9.999 years.
+    const first = Date.UTC(2016, 10, 18, 3, 45) / 1000;
+    const last = Date.UTC(2026, 10, 18, 3, 45) / 1000;
+    expect(availableYears(first, last)).toBe(10);
+    expect(availableYears(first + 10 * DAY, last)).toBe(10);
+  });
+  it('does not round a stock listed 9.5 years ago up to ten', () => {
+    expect(availableYears(0, 9.5 * YEAR)).toBe(9);
   });
 });

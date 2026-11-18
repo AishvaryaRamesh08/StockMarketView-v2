@@ -120,7 +120,8 @@ against TA-Lib ([results](scripts/talib-check/README.md)).
 - **Pattern track record**: below the chart, every candlestick pattern's history on that stock over 10 years of
   daily candles: how many times it formed, how often the price went the expected way 5, 10 or 20 days later, the
   average, best and worst move, and whether that beats the stock's normal behaviour (its base rate).
-- **What if you had invested**: a monthly SIP or a one-time investment in the stock from 1, 3, 5 or 10 years ago,
+- **What if you had invested**: a monthly SIP or a one-time investment in the stock from 1, 3 or 5 years ago, or from the
+  earliest price available (Max: up to 10 years, or since the stock listed),
   on real split-adjusted closes, against the NIFTY 50 / S&P 500 and a fixed deposit, with XIRR or CAGR and a value
   chart. Dividends, taxes and fees are not included.
 - **Image export**: download or copy the chart as a PNG with a caption (stock, timeframe, date) and no watermark.

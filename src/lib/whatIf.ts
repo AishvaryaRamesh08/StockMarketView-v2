@@ -28,6 +28,15 @@ export interface Outcome {
 
 const YEAR = 365.25 * 86400;
 
+/**
+ * Whole years of history available, for the "N years ago" buttons. A "10 years" download ends
+ * a day or two short of exactly ten years (its first candle is the first trading day in range),
+ * so up to about two weeks' shortfall still counts; the plan then starts on the first candle.
+ */
+export function availableYears(firstT: number, lastT: number): number {
+  return Math.floor((lastT - firstT) / YEAR + 0.04);
+}
+
 /** Index of the first candle at or after `t`, or -1. */
 export function startIndex(candles: Candle[], t: number): number {
   let lo = 0;

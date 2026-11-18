@@ -5,11 +5,12 @@ import { formatPct, formatPrice } from '../lib/format.ts';
 import { marketOf } from '../lib/markets.ts';
 import { cssVar, useAppearanceKey } from '../lib/theme.ts';
 import type { MarketId } from '../lib/types.ts';
-import { fixedDeposit, planDates, samePlan, type Outcome } from '../lib/whatIf.ts';
+import { availableYears, fixedDeposit, planDates, samePlan, type Outcome } from '../lib/whatIf.ts';
 
 const INDEX: Record<MarketId, { symbol: string; name: string }> = { IN: { symbol: '^NSEI', name: 'NIFTY 50' }, US: { symbol: '^GSPC', name: 'S&P 500' } };
 const DEFAULTS: Record<MarketId, { lump: number; sip: number; fd: number }> = { IN: { lump: 100_000, sip: 5_000, fd: 7 }, US: { lump: 10_000, sip: 500, fd: 4.5 } };
-const YEARS = [1, 3, 5, 10];
+/** Start points: years back, or 'max' for the earliest price loaded (up to 10 years, or since listing). */
+const STARTS: Array<number | 'max'> = [1, 3, 5, 'max'];
 const YEAR_S = 365.25 * 86400;
 
 function ValueChart({ stock, index, label, indexLabel, currency }: { stock: Outcome; index: Outcome | null; label: string; indexLabel: string; currency: string }) {
@@ -51,7 +52,7 @@ export function WhatIf({ symbol, currency }: { symbol: string; currency: string 
   const index = useDailyHistory(isIndex ? null : INDEX[market].symbol, seen);
   const [kind, setKind] = useState<'lump' | 'sip'>('sip');
   const [amount, setAmount] = useState<Record<'lump' | 'sip', string>>({ lump: String(DEFAULTS[market].lump), sip: String(DEFAULTS[market].sip) });
-  const [years, setYears] = useState(5);
+  const [years, setYears] = useState<number | 'max'>(5);
   const [fdRate, setFdRate] = useState(String(DEFAULTS[market].fd));
   const ticker = symbol.replace(/\.(NS|BO)$/, '').replace(/^\^/, '');
   const money = (v: number) => formatPrice(v, currency, 0);
@@ -60,9 +61,9 @@ export function WhatIf({ symbol, currency }: { symbol: string; currency: string 
   const candles = stock.candles;
   const first = candles?.[0]?.t ?? 0;
   const lastT = candles?.[candles.length - 1]?.t ?? 0;
-  const maxYears = candles ? Math.floor((lastT - first) / YEAR_S) : 0;
-  const yrs = Math.min(years, Math.max(1, maxYears));
-  const start = lastT - yrs * YEAR_S;
+  const maxYears = candles ? availableYears(first, lastT) : 0;
+  // 'max' starts on the first candle; a span longer than the history also falls back to it.
+  const start = years === 'max' ? first : lastT - Math.min(years, Math.max(1, maxYears)) * YEAR_S;
   const amt = Number(amount[kind]);
   const rate = Number(fdRate);
 
@@ -107,10 +108,18 @@ export function WhatIf({ symbol, currency }: { symbol: string; currency: string 
         </label>
         <div className="tp-field">
           <span className="tp-label">Starting</span>
-          <div className="segmented text" role="radiogroup" aria-label="Years ago">
-            {YEARS.map((y) => (
-              <button key={y} role="radio" aria-checked={years === y} className={years === y ? 'active' : ''} onClick={() => setYears(y)} disabled={!!candles && y > Math.max(1, maxYears)}>
-                {y}Y ago
+          <div className="segmented text" role="radiogroup" aria-label="Start">
+            {STARTS.map((y) => (
+              <button
+                key={y}
+                role="radio"
+                aria-checked={years === y}
+                className={years === y ? 'active' : ''}
+                onClick={() => setYears(y)}
+                disabled={!!candles && y !== 'max' && y > Math.max(1, maxYears)}
+                title={y === 'max' ? 'From the earliest price available: up to 10 years back, or since the stock listed' : undefined}
+              >
+                {y === 'max' ? 'Max' : `${y}Y ago`}
               </button>
             ))}
           </div>
