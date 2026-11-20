@@ -73,6 +73,8 @@ interface Prefs {
   view: View;
   /** The market chosen with the IN / US pills: it drives the chart, Markets and Portfolio together. */
   market: MarketId;
+  /** The last stock opened in each market, reopened by the IN / US switch. */
+  lastSymbol: Partial<Record<MarketId, string>>;
   /** Trade panel beside the chart. */
   tradeOpen: boolean;
   /** Which tab the side panel shows. */
@@ -106,6 +108,7 @@ const DEFAULT_PREFS: Prefs = {
   // welcome guide instead; a link that names a page (?v=markets) opens that page.
   view: 'chart',
   market: inIndia() ? 'IN' : 'US',
+  lastSymbol: {},
   tradeOpen: false,
   sideTab: 'trade',
   glance: false,
@@ -127,6 +130,10 @@ function loadPrefs(): Prefs {
   if (typeof raw.tradeOpen === 'boolean') p.tradeOpen = raw.tradeOpen;
   if (typeof raw.glance === 'boolean') p.glance = raw.glance;
   if (raw.sideTab === 'trade' || raw.sideTab === 'chat') p.sideTab = raw.sideTab;
+  if (raw.lastSymbol && typeof raw.lastSymbol === 'object') {
+    const ls = raw.lastSymbol as Record<string, unknown>;
+    for (const m of ['IN', 'US'] as const) if (typeof ls[m] === 'string' && marketOf(ls[m] as string) === m) p.lastSymbol = { ...p.lastSymbol, [m]: ls[m] as string };
+  }
   // The chart opens first, so the chosen market starts as the open stock's market.
   p.market = marketOf(p.symbol);
   return p;
@@ -311,17 +318,27 @@ export function App() {
     },
     [siteActions],
   );
+  // Remember the stock on screen as the last one seen in its market.
+  useEffect(() => {
+    const m = marketOf(prefs.symbol);
+    if (prefs.lastSymbol[m] !== prefs.symbol) setPrefs((p) => ({ ...p, lastSymbol: { ...p.lastSymbol, [m]: p.symbol } }));
+  }, [prefs.symbol, prefs.lastSymbol]);
+
   /**
    * The IN / US pills: one market for the whole site. Markets and Portfolio show that market,
-   * the watchlist switches to that market's list, and the chart opens its first stock.
+   * the watchlist switches to that market's list, and the chart goes back to the stock last
+   * viewed in that market (or, the first time, the first stock in that market's watchlist).
    */
   const chooseMarket = useCallback(
     (m: MarketId) => {
       const ofMarket = (s: string) => marketOf(s) === m && !s.startsWith('^');
       const list = wl.lists.find((l) => l.id === (m === 'IN' ? 'in' : 'us') && l.symbols.some(ofMarket)) ?? wl.lists.find((l) => l.symbols.some(ofMarket));
-      const first = list?.symbols.find(ofMarket) ?? POPULAR[m][0];
       if (list) wl.setActive(list.id);
-      setPrefs((p) => ({ ...p, market: m, symbol: first, compare: p.compare.filter((c) => c !== first) }));
+      setPrefs((p) => {
+        // Already showing a stock from this market: keep it.
+        const target = marketOf(p.symbol) === m ? p.symbol : (p.lastSymbol[m] ?? list?.symbols.find(ofMarket) ?? POPULAR[m][0]);
+        return { ...p, market: m, symbol: target, compare: p.compare.filter((c) => c !== target) };
+      });
     },
     [wl],
   );

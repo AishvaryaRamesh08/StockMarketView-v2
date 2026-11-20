@@ -147,8 +147,9 @@ against TA-Lib ([results](scripts/talib-check/README.md)).
   browser's built-in speech recognition and is hidden where the browser lacks it.
 - **Welcome guide**: on the first visit, a compact guide to the three pages and main features (a bottom sheet on
   phones); choosing Markets or Portfolio goes there, closing it stays on the chart. Reopened from **?**.
-- **IN / US switch**: the market status pills in the top bar choose the market for the whole site: the chart opens
-  the first stock of that market's watchlist, and Markets and Portfolio show that market. Opening a stock from the
+- **IN / US switch**: the market status pills in the top bar choose the market for the whole site: the chart goes back
+  to the stock you last viewed in that market (the first time, the top of that market's watchlist), and Markets and
+  Portfolio show that market. Opening a stock from the
   other market switches with it.
 - **Maximize** (F): only the top bar, chart controls and chart.
 - **Appearance**: dark and light themes, plus a colour-blind-friendly blue/orange palette for up/down.
