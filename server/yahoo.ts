@@ -24,6 +24,8 @@ export const yahooPath = {
   /** Up to YAHOO_MAX_BATCH symbols in one call. */
   spark: (symbols: string[], range: string, interval: string) => `/v7/finance/spark?symbols=${symbols.map(enc).join(',')}&range=${range}&interval=${interval}`,
   search: (symbol: string) => `/v1/finance/search?q=${enc(symbol)}&quotesCount=5&newsCount=0&listsCount=0`,
+  /** Free-text ticker search, for listings newer than the bundled search index. */
+  searchQuotes: (query: string) => `/v1/finance/search?q=${enc(query)}&quotesCount=12&newsCount=0&listsCount=0`,
   timeseries: (symbol: string, types: string[], fromSec: number, toSec: number) =>
     `/ws/fundamentals-timeseries/v1/finance/timeseries/${enc(symbol)}?type=${types.join(',')}&period1=${fromSec}&period2=${toSec}`,
   related: (symbol: string) => `/v6/finance/recommendationsbysymbol/${enc(symbol)}`,
@@ -140,6 +142,37 @@ export function latestTimeseriesValue(json: unknown, type: string): number | und
     return points.filter((p) => p?.reportedValue?.raw != null).at(-1)?.reportedValue?.raw;
   }
   return undefined;
+}
+
+/** Yahoo exchange codes this site covers, with the names its search index uses. */
+const SEARCH_EXCHANGES: Record<string, string> = {
+  NMS: 'NASDAQ',
+  NGM: 'NASDAQ',
+  NCM: 'NASDAQ',
+  NYQ: 'NYSE',
+  ASE: 'NYSE American',
+  PCX: 'NYSE Arca',
+  BTS: 'Cboe',
+  NSI: 'NSE',
+  BSE: 'BSE',
+};
+
+/**
+ * Search results Yahoo knows that are listed where this site works (NSE, BSE and the US
+ * exchanges), as search-index rows. Crypto, funds and foreign listings are left out.
+ */
+export function parseSearchSymbols(json: unknown): Array<[string, string, string, 's' | 'e' | 'i']> {
+  const quotes = (json as { quotes?: Array<{ symbol?: string; shortname?: string; longname?: string; exchange?: string; quoteType?: string }> }).quotes ?? [];
+  const out: Array<[string, string, string, 's' | 'e' | 'i']> = [];
+  for (const q of quotes) {
+    if (!q.symbol || !q.exchange) continue;
+    const kind = q.quoteType === 'EQUITY' ? 's' : q.quoteType === 'ETF' ? 'e' : q.quoteType === 'INDEX' ? 'i' : null;
+    const exchange = SEARCH_EXCHANGES[q.exchange] ?? (kind === 'i' && q.symbol.startsWith('^') ? 'Index' : null);
+    if (!kind || !exchange) continue;
+    // Yahoo's long names carry suffixes like "Class A Common Stock"; the short name reads better.
+    out.push([q.symbol, (q.longname ?? q.shortname ?? q.symbol).replace(/\s+(Class [A-C] )?Common Stock$/i, '').trim(), exchange, kind]);
+  }
+  return out;
 }
 
 /** Sector and industry of `symbol` from a search response. */

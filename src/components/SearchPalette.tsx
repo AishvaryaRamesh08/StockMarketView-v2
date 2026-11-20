@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { POPULAR, loadSymbols, searchSymbols, type MarketFilter, type SymbolEntry } from '../lib/search.ts';
+import { POPULAR, loadSymbols, searchSymbols, toEntry, type MarketFilter, type SymbolEntry } from '../lib/search.ts';
+import { fetchSearch } from '../lib/api.ts';
 import { load, save } from '../lib/storage.ts';
 
 export type SearchMode = 'chart' | 'compare' | 'watchlist';
@@ -96,7 +97,7 @@ export function SearchPalette({ open, mode = 'chart', context, actions, onClose,
 
   const actionHits = useMemo(() => (mode === 'chart' && actions ? matchActions(actions, query) : []), [mode, actions, query]);
 
-  const results: SymbolEntry[] = useMemo(() => {
+  const local: SymbolEntry[] = useMemo(() => {
     if (!entries || commandOnly) return [];
     if (query.trim()) return searchSymbols(entries, query, filter);
     const recent = load(RECENT_KEY, [] as string[], isStringArray);
@@ -107,6 +108,32 @@ export function SearchPalette({ open, mode = 'chart', context, actions, onClose,
       .filter((e): e is SymbolEntry => !!e && (filter === 'ALL' || e.market === filter) && !seen.has(e.symbol) && !!seen.add(e.symbol))
       .slice(0, 12);
   }, [entries, query, filter, bySymbol, commandOnly]);
+
+  // The bundled index is rebuilt now and then, so a stock that listed this week may be missing.
+  // When it finds little, ask Yahoo's live search too (one cached request, after typing pauses).
+  const [live, setLive] = useState<{ query: string; entries: SymbolEntry[] }>({ query: '', entries: [] });
+  const q = query.trim();
+  const wantLive = !!entries && !commandOnly && q.length >= 2 && local.length < 5;
+  useEffect(() => {
+    if (!wantLive) return;
+    const c = new AbortController();
+    const t = setTimeout(() => {
+      fetchSearch(q, c.signal)
+        .then((r) => setLive({ query: q, entries: r.symbols.map(toEntry) }))
+        .catch(() => {});
+    }, 350);
+    return () => {
+      clearTimeout(t);
+      c.abort();
+    };
+  }, [wantLive, q]);
+
+  const results: SymbolEntry[] = useMemo(() => {
+    if (!wantLive || live.query !== q) return local;
+    const have = new Set(local.map((e) => e.symbol));
+    const extra = live.entries.filter((e) => !have.has(e.symbol) && (filter === 'ALL' || e.market === filter));
+    return [...local, ...extra];
+  }, [local, live, q, wantLive, filter]);
 
   // Commands go first, unless the query is exactly a ticker: typing "TCS" + Enter must open TCS.
   const items: Item[] = useMemo(() => {

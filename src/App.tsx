@@ -27,6 +27,7 @@ const Welcome = lazy(() => import('./components/Welcome.tsx').then((m) => ({ def
 import { ActiveOverlays, OverlayMenu } from './components/OverlayMenu.tsx';
 import { QuoteHeader } from './components/QuoteHeader.tsx';
 import { SearchPalette, rememberRecent, type PaletteAction, type SearchMode } from './components/SearchPalette.tsx';
+import { POPULAR } from './lib/search.ts';
 import { SimilarStocks } from './components/SimilarStocks.tsx';
 import { useReplay } from './hooks/useReplay.ts';
 import { WatchlistPanel } from './components/WatchlistPanel.tsx';
@@ -49,7 +50,6 @@ import { digitsFor } from './lib/format.ts';
 import { decodeLink, encodeLink, type LinkState } from './lib/shareUrl.ts';
 import { previousSession, supportResistance, type Level } from './lib/levels.ts';
 import { marketOf, sessionKeyFn } from './lib/markets.ts';
-import { isMarketId } from './lib/marketData.ts';
 import { DEFAULT_OVERLAYS, OVERLAYS, isOverlayId, type OverlayId } from './lib/overlays.ts';
 import { setAppearance, useAppearance } from './lib/theme.ts';
 import type { PatternId } from './lib/patterns.ts';
@@ -71,8 +71,8 @@ interface Prefs {
   frames: Frame[];
   sidebar: boolean;
   view: View;
-  pulseMarket: MarketId;
-  portfolioMarket: MarketId;
+  /** The market chosen with the IN / US pills: it drives the chart, Markets and Portfolio together. */
+  market: MarketId;
   /** Trade panel beside the chart. */
   tradeOpen: boolean;
   /** Which tab the side panel shows. */
@@ -105,8 +105,7 @@ const DEFAULT_PREFS: Prefs = {
   // Every visit starts on the chart. A first-time visitor can pick Markets or Portfolio from the
   // welcome guide instead; a link that names a page (?v=markets) opens that page.
   view: 'chart',
-  pulseMarket: inIndia() ? 'IN' : 'US',
-  portfolioMarket: inIndia() ? 'IN' : 'US',
+  market: inIndia() ? 'IN' : 'US',
   tradeOpen: false,
   sideTab: 'trade',
   glance: false,
@@ -125,20 +124,21 @@ function loadPrefs(): Prefs {
   if (Array.isArray(raw.frames) && raw.frames.length === 3 && raw.frames.every((f) => isPeriodId(f?.period) && isIntervalId(f?.interval))) p.frames = raw.frames as Frame[];
   if (typeof raw.sidebar === 'boolean') p.sidebar = raw.sidebar;
   // The last-used tab is deliberately not restored: returning visitors also start on the chart.
-  if (isMarketId(raw.portfolioMarket)) p.portfolioMarket = raw.portfolioMarket;
   if (typeof raw.tradeOpen === 'boolean') p.tradeOpen = raw.tradeOpen;
   if (typeof raw.glance === 'boolean') p.glance = raw.glance;
   if (raw.sideTab === 'trade' || raw.sideTab === 'chat') p.sideTab = raw.sideTab;
-  if (isMarketId(raw.pulseMarket)) p.pulseMarket = raw.pulseMarket;
+  // The chart opens first, so the chosen market starts as the open stock's market.
+  p.market = marketOf(p.symbol);
   return p;
 }
 
 /** A shared link overrides the saved session for what it specifies; everything else is kept. */
 function applyLink(p: Prefs, link: LinkState | null): Prefs {
   if (!link) return p;
-  if (link.view === 'markets') return { ...p, view: 'markets', pulseMarket: link.market ?? p.pulseMarket };
-  if (link.view === 'portfolio') return { ...p, view: 'portfolio', portfolioMarket: link.market ?? p.portfolioMarket };
+  if (link.view === 'markets') return { ...p, view: 'markets', market: link.market ?? p.market };
+  if (link.view === 'portfolio') return { ...p, view: 'portfolio', market: link.market ?? p.market };
   const next: Prefs = { ...p, view: 'chart', symbol: link.symbol ?? p.symbol };
+  next.market = marketOf(next.symbol);
   if (link.period) next.period = link.period;
   if (link.interval) next.interval = link.interval;
   // A link may pair a period and interval that can't be served together; fix rather than fail.
@@ -152,9 +152,9 @@ function applyLink(p: Prefs, link: LinkState | null): Prefs {
 function linkFor(p: Prefs): string {
   return encodeLink(
     p.view === 'markets'
-      ? { view: 'markets', market: p.pulseMarket }
+      ? { view: 'markets', market: p.market }
       : p.view === 'portfolio'
-        ? { view: 'portfolio', market: p.portfolioMarket }
+        ? { view: 'portfolio', market: p.market }
       : { view: 'chart', symbol: p.symbol, period: p.period, interval: p.interval, overlays: p.overlays, compare: p.compare, layout: p.layout },
   );
 }
@@ -180,6 +180,7 @@ export function App() {
 
   const [toast, setToast] = useState<string | null>(null);
   // First visit: introduce the site, then briefly highlight the view tabs and the trade button.
+  // The welcome guide opens on the first visit, and from the ? button later.
   const [welcome, setWelcome] = useState(() => !load('smv.welcomed', false, (v): v is boolean => typeof v === 'boolean'));
   const [attention, setAttention] = useState(false);
   const closeWelcome = useCallback(() => {
@@ -310,6 +311,20 @@ export function App() {
     },
     [siteActions],
   );
+  /**
+   * The IN / US pills: one market for the whole site. Markets and Portfolio show that market,
+   * the watchlist switches to that market's list, and the chart opens its first stock.
+   */
+  const chooseMarket = useCallback(
+    (m: MarketId) => {
+      const ofMarket = (s: string) => marketOf(s) === m && !s.startsWith('^');
+      const list = wl.lists.find((l) => l.id === (m === 'IN' ? 'in' : 'us') && l.symbols.some(ofMarket)) ?? wl.lists.find((l) => l.symbols.some(ofMarket));
+      const first = list?.symbols.find(ofMarket) ?? POPULAR[m][0];
+      if (list) wl.setActive(list.id);
+      setPrefs((p) => ({ ...p, market: m, symbol: first, compare: p.compare.filter((c) => c !== first) }));
+    },
+    [wl],
+  );
   const setPeriod = useCallback((p: PeriodId) => update((x) => ({ period: p, interval: intervalForPeriod(p, x.interval) })), [update]);
   const setInterval = useCallback((i: IntervalId) => update((x) => ({ interval: i, period: periodForInterval(i, x.period) })), [update]);
   const toggleOverlay = useCallback((id: OverlayId) => update((p) => ({ overlays: p.overlays.includes(id) ? p.overlays.filter((o) => o !== id) : [...p.overlays, id] })), [update]);
@@ -407,8 +422,8 @@ export function App() {
       { id: 'focus', label: focus ? 'Exit full-screen chart' : 'Maximize chart', keywords: 'full screen fullscreen focus expand zoom', run: () => { update({ view: 'chart' }); setFocus((f) => !f); } },
       { id: 'trade', label: prefs.tradeOpen && prefs.sideTab === 'trade' ? 'Close trade panel' : `Paper trade ${symbol}`, keywords: 'buy sell order ticket paper', run: () => update((p) => ({ view: 'chart', tradeOpen: !(p.tradeOpen && p.sideTab === 'trade'), sideTab: 'trade' })) },
       { id: 'chat', label: 'Ask AI (chat with your charts)', keywords: 'chat gemini ai assistant bot voice question help', run: () => update({ tradeOpen: true, sideTab: 'chat' }) },
-      { id: 'market-in', label: 'Markets: show India', keywords: 'nifty nse', run: () => siteActions.openMarkets('IN') },
-      { id: 'market-us', label: 'Markets: show US', keywords: 's&p nasdaq nyse', run: () => siteActions.openMarkets('US') },
+      { id: 'market-in', label: 'Switch to India', keywords: 'nifty nse bse indian market', run: () => chooseMarket('IN') },
+      { id: 'market-us', label: 'Switch to US', keywords: 's&p nasdaq nyse american market', run: () => chooseMarket('US') },
       appearance.theme === 'dark'
         ? { id: 'theme', label: 'Switch to light theme', keywords: 'appearance mode white', run: () => setAppearance({ theme: 'light' }) }
         : { id: 'theme', label: 'Switch to dark theme', keywords: 'appearance mode black night', run: () => setAppearance({ theme: 'dark' }) },
@@ -429,7 +444,7 @@ export function App() {
         run: () => siteActions.setOverlay(prefs, o.id, !prefs.overlays.includes(o.id)),
       })),
     ],
-    [appearance, prefs, focus, replayOn, symbol, watched, wl, update, siteActions],
+    [appearance, prefs, focus, replayOn, symbol, watched, wl, update, siteActions, chooseMarket],
   );
 
   /* ------------------------------ image + share ------------------------------ */
@@ -608,8 +623,8 @@ export function App() {
             ?
           </button>
           <AppearanceMenu />
-          <MarketStatusPill market="IN" />
-          <MarketStatusPill market="US" />
+          <MarketStatusPill market="IN" selected={prefs.market === 'IN'} onSelect={() => chooseMarket('IN')} />
+          <MarketStatusPill market="US" selected={prefs.market === 'US'} onSelect={() => chooseMarket('US')} />
         </div>
       </header>
 
@@ -620,14 +635,13 @@ export function App() {
 
         {prefs.view === 'markets' ? (
           <main className="workspace">
-            <MarketPulse market={prefs.pulseMarket} onMarket={(m) => update({ pulseMarket: m })} onOpen={openFromPulse} />
+            <MarketPulse market={prefs.market} onOpen={openFromPulse} />
           </main>
         ) : prefs.view === 'portfolio' ? (
           <main className="workspace">
             <Suspense fallback={<div className="skeleton" style={{ height: 320 }} />}>
             <Portfolio
-              market={prefs.portfolioMarket}
-              onMarket={(m) => update({ portfolioMarket: m })}
+              market={prefs.market}
               paper={paper}
               quotes={quotes}
               onOpen={selectSymbol}
@@ -935,7 +949,7 @@ export function App() {
                   quote={quote}
                   paper={paper}
                   onToast={setToast}
-                  onOpenPortfolio={() => update({ view: 'portfolio', portfolioMarket: marketOf(symbol) })}
+                  onOpenPortfolio={() => update({ view: 'portfolio', market: marketOf(symbol) })}
                 />
               ) : (
                 <Suspense fallback={null}>
@@ -969,14 +983,14 @@ export function App() {
 
       {welcome && (
         <Suspense fallback={null}>
-        <Welcome
-          searchKey={`${isMac ? '⌘' : 'Ctrl'} K`}
-          onClose={closeWelcome}
-          onGo={(view) => {
-            closeWelcome();
-            update({ view });
-          }}
-        />
+          <Welcome
+            searchKey={`${isMac ? '⌘' : 'Ctrl'} K`}
+            onClose={closeWelcome}
+            onGo={(view) => {
+              closeWelcome();
+              update({ view });
+            }}
+          />
         </Suspense>
       )}
 

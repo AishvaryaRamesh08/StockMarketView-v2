@@ -11,7 +11,6 @@ import { fillsOf, realizedByStock, unrealizedByStock } from '../lib/paperStats.t
 
 interface Props {
   market: MarketId;
-  onMarket: (m: MarketId) => void;
   paper: PaperApi;
   quotes: Record<string, Quote>;
   onOpen: (symbol: string) => void;
@@ -51,7 +50,7 @@ function EquityChart({ points, start, currency }: { points: EquityPoint[]; start
 }
 
 /** The paper-trading account for one market: totals, equity curve, holdings, orders, history. */
-export function Portfolio({ market, onMarket, paper, quotes, onOpen, onToast, onAnalyse }: Props) {
+export function Portfolio({ market, paper, quotes, onOpen, onToast, onAnalyse }: Props) {
   const s = paper.state;
   const currency = CURRENCY[market];
   const money = (v: number | null | undefined, digits = 2) => formatPrice(v, currency, digits);
@@ -100,14 +99,7 @@ export function Portfolio({ market, onMarket, paper, quotes, onOpen, onToast, on
     <div className="portfolio">
       <header className="pulse-head">
         <div className="pulse-title">
-          <h1>Portfolio</h1>
-          <div className="segmented text" role="radiogroup" aria-label="Wallet">
-            {(['IN', 'US'] as const).map((m) => (
-              <button key={m} role="radio" aria-checked={market === m} className={market === m ? 'active' : ''} onClick={() => onMarket(m)}>
-                {m === 'IN' ? 'India (₹)' : 'US ($)'}
-              </button>
-            ))}
-          </div>
+          <h1>{market === 'IN' ? 'India portfolio (₹)' : 'US portfolio ($)'}</h1>
           <span className="badge subtle">Simulated</span>
         </div>
         {(positions.length > 0 || history.length > 0) && (

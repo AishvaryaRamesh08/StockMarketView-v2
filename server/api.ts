@@ -15,6 +15,7 @@ import {
   latestTimeseriesValue,
   parseCandles,
   parseSparkCloses,
+  parseSearchSymbols,
   relatedSymbols,
   searchClassification,
   yahooPath,
@@ -236,6 +237,17 @@ async function closes(params: URLSearchParams): Promise<Response> {
   return json({ series } satisfies ClosesResponse, 200, ttlFor(range));
 }
 
+/**
+ * Live ticker search through Yahoo, used only when the bundled search index finds little
+ * (so brand-new listings show up the day they list). Cached for an hour per query.
+ */
+async function search(params: URLSearchParams): Promise<Response> {
+  const q = (params.get('q') ?? '').trim();
+  if (q.length < 2 || q.length > 40 || !/^[\p{L}\p{N} .&'^-]+$/u.test(q)) return fail(400, 'Search for 2–40 letters or digits');
+  const rows = parseSearchSymbols(await upstream(yahooPath.searchQuotes(q)));
+  return json({ symbols: rows }, 200, 3600);
+}
+
 /* --------------------------------- profile --------------------------------- */
 
 /**
@@ -433,6 +445,7 @@ export async function handleApi(request: Request, waitUntil?: (p: Promise<unknow
     else if (route === 'universe') res = await universeRoute(url.searchParams);
     else if (route === 'news') res = await newsRoute(url.searchParams);
     else if (route === 'closes') res = await closes(url.searchParams);
+    else if (route === 'search') res = await search(url.searchParams);
     else res = fail(404, 'Unknown endpoint');
   } catch (err) {
     const status = err instanceof UpstreamError ? err.status : 0;

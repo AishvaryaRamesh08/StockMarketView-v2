@@ -14,12 +14,11 @@ import { Sparkline } from './Sparkline.tsx';
 
 interface Props {
   market: MarketId;
-  onMarket: (m: MarketId) => void;
   onOpen: (symbol: string, pattern?: PatternId) => void;
 }
 
 /** The landing page: how the whole market is doing right now, before you search for anything. */
-export function MarketPulse({ market, onMarket, onOpen }: Props) {
+export function MarketPulse({ market, onOpen }: Props) {
   const { pulse, error, lastUpdated } = usePulse(market, true);
   const { feed, error: feedError } = usePatternFeed(market, true);
   const { news, error: newsError, lastUpdated: newsUpdated } = useNews(market, true);
@@ -53,14 +52,7 @@ export function MarketPulse({ market, onMarket, onOpen }: Props) {
     <div className="pulse">
       <header className="pulse-head">
         <div className="pulse-title">
-          <h1>Markets</h1>
-          <div className="segmented text" role="radiogroup" aria-label="Market">
-            {(['IN', 'US'] as const).map((m) => (
-              <button key={m} role="radio" aria-checked={market === m} className={market === m ? 'active' : ''} onClick={() => onMarket(m)}>
-                {m === 'IN' ? 'India' : 'US'}
-              </button>
-            ))}
-          </div>
+          <h1>{market === 'IN' ? 'Indian markets' : 'US markets'}</h1>
           <MarketStatusPill market={market} />
         </div>
         {stocks.length === 0 && (

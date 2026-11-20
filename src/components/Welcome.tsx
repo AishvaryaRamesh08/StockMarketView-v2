@@ -8,35 +8,40 @@ interface Props {
 
 const VIEWS = [
   {
-    id: 'markets' as const,
-    title: 'Markets',
-    text: "Today's big picture: indices, top gainers and losers, the latest market news, and stocks that formed a pattern today.",
-    icon: <path d="M3 3h6v8H3zM11 3h6v5h-6zM11 10h6v7h-6zM3 13h6v4H3z" />,
-  },
-  {
     id: 'chart' as const,
     title: 'Chart',
-    text: 'Live candlestick charts with indicators, pattern markers, drawing tools and a plain-English summary.',
+    text: 'Live candles, indicators, pattern markers, drawing tools and a plain-English summary.',
     icon: <path d="M3 15l4-5 3 3 7-8M3 18h14" />,
+  },
+  {
+    id: 'markets' as const,
+    title: 'Markets',
+    text: 'Indices, top gainers and losers, market news and today’s patterns.',
+    icon: <path d="M3 3h6v8H3zM11 3h6v5h-6zM11 10h6v7h-6zM3 13h6v4H3z" />,
   },
   {
     id: 'portfolio' as const,
     title: 'Portfolio',
-    text: 'Practise trading with virtual money (₹10 lakh and $100,000) at live prices, then see what you invested and gained by stock and by day.',
+    text: 'Practise trading with virtual ₹10 lakh and $100,000; see P&L by stock and day.',
     icon: <path d="M3 7h14v10H3zM7 7V4h6v3M3 11h14" />,
   },
 ];
 
-const FEATURES = [
-  ['Search', 'any NSE, BSE or US stock by name or ticker'],
-  ['Hover or tap', 'any term with a dotted underline or a ? to see what it means'],
-  ['Star', 'stocks to keep them in your watchlists on the left'],
-  ['Draw, save and share', 'trend lines and notes, chart images and links'],
-  ['Replay', 'past markets candle by candle and practise trading without seeing the future'],
-  ['Below each chart', 'how often each pattern worked on that stock, and what a SIP or lump sum would be worth today'],
+const FEATURES: Array<[string, string]> = [
+  ['Search', 'any NSE, BSE or US stock'],
+  ['IN / US', '(top right) switches the whole site between India and the US'],
+  ['Hover or tap', 'anything underlined or marked ? for an explanation'],
+  ['Star', 'stocks to keep them in your watchlist'],
+  ['Draw, save, share', 'trend lines, chart images and links'],
+  ['Replay', 'past markets candle by candle and practise trading'],
+  ['Below each chart', 'how each pattern did on that stock, and a SIP calculator'],
 ];
 
-/** First-visit introduction; reopened from the ? button in the top bar. */
+/**
+ * The welcome guide: opens on the first visit, and from the ? button later. Compact on desktop;
+ * on a phone it is a bottom sheet that leaves the top of the page in view. Choosing Markets or
+ * Portfolio goes there; anything else stays on the chart.
+ */
 export function Welcome({ onClose, onGo, searchKey }: Props) {
   const dialog = useRef<HTMLDivElement>(null);
 
@@ -57,17 +62,19 @@ export function Welcome({ onClose, onGo, searchKey }: Props) {
           </svg>
         </button>
         <h2 id="welcome-title">Welcome to StockMarketView</h2>
-        <p className="welcome-lead">Free, live charts for Indian (NSE, BSE) and US stocks, refreshed every 30 seconds. No sign-up: everything you save stays in this browser.</p>
+        <p className="welcome-lead">Free live charts for Indian (NSE, BSE) and US stocks, refreshed every 30 seconds. No sign-up: everything stays in this browser.</p>
 
-        <p className="welcome-section">Where would you like to start? You can switch any time with the tabs at the top</p>
+        <p className="welcome-section">Where would you like to start?</p>
         <div className="welcome-views">
           {VIEWS.map((v) => (
-            <button key={v.id} className={`welcome-view v-${v.id}`} onClick={() => onGo(v.id)}>
-              <svg viewBox="0 0 20 20" aria-hidden>
-                {v.icon}
-              </svg>
-              <b>{v.title}</b>
-              <span>{v.text}</span>
+            <button key={v.id} className={`welcome-view v-${v.id}`} onClick={() => (v.id === 'chart' ? onClose() : onGo(v.id))}>
+              <span className="welcome-view-head">
+                <svg viewBox="0 0 20 20" aria-hidden>
+                  {v.icon}
+                </svg>
+                <b>{v.title}</b>
+              </span>
+              <span className="welcome-view-text">{v.text}</span>
             </button>
           ))}
         </div>
@@ -77,14 +84,14 @@ export function Welcome({ onClose, onGo, searchKey }: Props) {
             <path d="M10 2.5l1.6 4.4 4.4 1.6-4.4 1.6L10 14.5l-1.6-4.4L4 8.5l4.4-1.6zM15.5 13l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />
           </svg>
           <span>
-            <b>Ask AI</b> (top right): type or say “show Reliance for a year with RSI”, “how is my portfolio doing?” or “what is a demat account?” and it draws the chart, reviews your paper trades or explains. Uses your own free Gemini key, kept in your browser.
+            <b>Ask AI</b> (top right): type or say “show Reliance for a year with RSI” or “how is my portfolio doing?”. Uses your own free Gemini key.
           </span>
         </div>
 
         <ul className="welcome-features">
           {FEATURES.map(([k, v]) => (
             <li key={k}>
-              <b>{k}</b> {k === 'Search' ? <>({searchKey}) </> : null}
+              <b>{k}</b> {k === 'Search' ? <span className="welcome-key">({searchKey}) </span> : null}
               {v}
             </li>
           ))}

@@ -51,3 +51,25 @@ describe('parseSparkCloses', () => {
     expect(aapl.closes).toHaveLength(2);
   });
 });
+
+describe('parseSearchSymbols', () => {
+  it('keeps listings on the exchanges this site covers, as search-index rows', async () => {
+    const { parseSearchSymbols } = await import('./yahoo.ts');
+    // Trimmed from the real /v1/finance/search?q=anthropic response, 20 Nov 2026.
+    const res = {
+      quotes: [
+        { symbol: 'ANT', shortname: 'Anthropic, PBC', longname: 'Anthropic, PBC Class A Common Stock', exchange: 'NMS', quoteType: 'EQUITY' },
+        { symbol: 'ANTW', shortname: 'Anthropic AI Lab Ecosystem ETF', exchange: 'PCX', quoteType: 'ETF' },
+        { symbol: 'ANTHROPIC-USD', shortname: 'Anthropic tokenized stock (PreStocks) USD', exchange: 'CCC', quoteType: 'CRYPTOCURRENCY' },
+        { symbol: 'ANTHZZX', shortname: 'Anthropic - Company Level', exchange: 'NAS', quoteType: 'MUTUALFUND' },
+        { symbol: 'ANT.SW', shortname: 'Anthropic, PBC', exchange: 'EBS', quoteType: 'EQUITY' },
+        { symbol: 'RELIANCE.NS', shortname: 'RELIANCE INDUSTRIES', longname: 'Reliance Industries Limited', exchange: 'NSI', quoteType: 'EQUITY' },
+      ],
+    };
+    expect(parseSearchSymbols(res)).toEqual([
+      ['ANT', 'Anthropic, PBC', 'NASDAQ', 's'],
+      ['ANTW', 'Anthropic AI Lab Ecosystem ETF', 'NYSE Arca', 'e'],
+      ['RELIANCE.NS', 'Reliance Industries Limited', 'NSE', 's'],
+    ]);
+  });
+});

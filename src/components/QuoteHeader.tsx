@@ -5,6 +5,7 @@ import { marketOf, marketStatus } from '../lib/markets.ts';
 import type { Profile, Quote } from '../lib/types.ts';
 import { InfoTip } from './InfoTip.tsx';
 import { MarketStatusPill } from './MarketStatusPills.tsx';
+import { useScrollFade } from '../hooks/useScrollFade.ts';
 
 interface Props {
   symbol: string;
@@ -66,6 +67,7 @@ function Freshness({ symbol, lastUpdated, refreshError, quote }: { symbol: strin
 
 export function QuoteHeader({ symbol, quote, profile, loading, lastUpdated, refreshError, watched, watchlistName, onToggleWatch, extra }: Props) {
   const flash = useFlash(quote?.price);
+  const fade = useScrollFade<HTMLDListElement>();
   const market = marketOf(symbol);
 
   if (loading && !quote) {
@@ -131,7 +133,7 @@ export function QuoteHeader({ symbol, quote, profile, loading, lastUpdated, refr
         <Freshness symbol={symbol} lastUpdated={lastUpdated} refreshError={refreshError} quote={quote} />
       </div>
 
-      <dl className="quote-stats">
+      <dl className="quote-stats" ref={fade}>
         <div>
           <dt>Day range</dt>
           <dd className="num">

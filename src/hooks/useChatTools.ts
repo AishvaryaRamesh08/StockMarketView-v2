@@ -1,11 +1,11 @@
 import { useCallback, useRef } from 'react';
-import { fetchChart, fetchQuotes } from '../lib/api.ts';
+import { fetchChart, fetchQuotes, fetchSearch } from '../lib/api.ts';
 import { fitRange, periodFor, resolveTicker, systemPrompt, toInterval, toOverlay, toPeriod, type ChatContext } from '../lib/chatTools.ts';
 import type { FunctionCall, ToolOutcome } from '../lib/gemini.ts';
 import { marketOf, marketStatus } from '../lib/markets.ts';
 import { OVERLAY_BY_ID } from '../lib/overlays.ts';
 import { INTERVALS, PERIODS, type IntervalId, type PeriodId } from '../lib/ranges.ts';
-import { loadSymbols, type SymbolEntry } from '../lib/search.ts';
+import { loadSymbols, toEntry, type SymbolEntry } from '../lib/search.ts';
 import { summarize } from '../lib/summary.ts';
 import type { MarketId, Quote } from '../lib/types.ts';
 import type { Frame } from '../lib/frames.ts';
@@ -62,14 +62,19 @@ export function useChatTools(deps: Deps) {
   const current = (): ChatPrefs => ({ ...ref.current.prefs, ...pending.current });
   /** Remembers what an action changed, for the next tool call in the same reply. */
   const track = (patch: ScreenPatch) => {
-    const { frames: _f, pulseMarket: _m, ...rest } = patch;
+    const { frames: _f, market: _m, ...rest } = patch;
     pending.current = { ...pending.current, ...rest };
   };
   const act = () => ref.current.actions;
 
   const symbols = async (): Promise<SymbolEntry[]> => loadSymbols();
   const resolve = async (q: unknown) => {
-    const e = resolveTicker(await symbols(), q);
+    let e = resolveTicker(await symbols(), q);
+    // New listings may not be in the bundled index yet: ask the live search.
+    if (!e && typeof q === 'string' && q.trim().length >= 2) {
+      const row = (await fetchSearch(q.trim()).catch(() => ({ symbols: [] }))).symbols[0];
+      if (row) e = toEntry(row);
+    }
     if (!e) throw new Error(`Couldn't find a stock or index matching “${String(q)}”. Try the ticker, e.g. RELIANCE or AAPL.`);
     return e;
   };

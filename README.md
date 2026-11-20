@@ -101,7 +101,7 @@ against TA-Lib ([results](scripts/talib-check/README.md)).
 - **Compare** up to 4 stocks or indices as % change.
 - **Multi-timeframe**: three charts of the same stock with synced crosshairs.
 - **Watchlists**: multiple named lists with live prices, sparklines and pattern badges.
-- **Markets page**: India/US toggle, index cards, market breadth, and the NIFTY 500 / S&P 500
+- **Markets page**: index cards, market breadth, and the NIFTY 500 / S&P 500
   top gainers and losers, refreshed every 2 minutes while the market is open.
 - **Market news**: the latest headlines beside the movers, each with a short snippet and a link to the full
   article on the publisher's site (nothing is copied or stored). India: The Economic Times and Mint; US: Yahoo
@@ -145,7 +145,11 @@ against TA-Lib ([results](scripts/talib-check/README.md)).
   never reaches this site's Worker. The model is a setting (default `gemini-3.5-flash-lite`, the fastest); if it is overloaded, slow or out of
   quota the chat falls back to another Gemini model and says so. Voice input uses the
   browser's built-in speech recognition and is hidden where the browser lacks it.
-- **Welcome guide**: a short first-visit introduction to the three pages and main features, reopened from **?**.
+- **Welcome guide**: on the first visit, a compact guide to the three pages and main features (a bottom sheet on
+  phones); choosing Markets or Portfolio goes there, closing it stays on the chart. Reopened from **?**.
+- **IN / US switch**: the market status pills in the top bar choose the market for the whole site: the chart opens
+  the first stock of that market's watchlist, and Markets and Portfolio show that market. Opening a stock from the
+  other market switches with it.
 - **Maximize** (F): only the top bar, chart controls and chart.
 - **Appearance**: dark and light themes, plus a colour-blind-friendly blue/orange palette for up/down.
 - **Command palette** (Cmd/Ctrl+K): search stocks, or type a command such as "light theme", "show RSI" or "go to markets".

@@ -9,7 +9,7 @@ describe('shared screen actions (command palette and Ask AI)', () => {
     const remember = vi.fn();
     const a = createSiteActions(apply, remember, 4);
     const patch = a.openChart(cur, 'MSFT', { period: '5y', layout: 'single' });
-    expect(patch).toEqual({ symbol: 'MSFT', view: 'chart', compare: ['NVDA'], period: '5y', layout: 'single' });
+    expect(patch).toEqual({ symbol: 'MSFT', market: 'US', view: 'chart', compare: ['NVDA'], period: '5y', layout: 'single' });
     expect(apply).toHaveBeenCalledWith(patch);
     expect(remember).toHaveBeenCalledWith('MSFT');
   });
