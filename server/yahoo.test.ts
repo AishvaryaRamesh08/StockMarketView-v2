@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSparkCloses, type YahooSparkResponse } from './yahoo.ts';
+import { parseSparkCloses, yahooPath, type YahooSparkResponse } from './yahoo.ts';
 
 // Shape of a real /v7/finance/spark response (range=5d, interval=1d), trimmed to two symbols.
 // RELIANCE.NS shows the NSE quirk: today's daily close comes back null.
@@ -71,5 +71,13 @@ describe('parseSearchSymbols', () => {
       ['ANTW', 'Anthropic AI Lab Ecosystem ETF', 'NYSE Arca', 'e'],
       ['RELIANCE.NS', 'Reliance Industries Limited', 'NSE', 's'],
     ]);
+  });
+});
+
+describe('yahooPath.chart', () => {
+  it('asks for Max as a dated window, because range=max ignores the interval', () => {
+    const now = Date.UTC(2026, 10, 21);
+    expect(yahooPath.chart('AAPL', 'max', '1d', false, now)).toBe(`/v8/finance/chart/AAPL?period1=-2208988800&period2=${now / 1000 + 86400}&interval=1d&includePrePost=false`);
+    expect(yahooPath.chart('AAPL', '10y', '1d')).toBe('/v8/finance/chart/AAPL?range=10y&interval=1d&includePrePost=false');
   });
 });

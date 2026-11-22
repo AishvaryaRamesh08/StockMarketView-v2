@@ -16,11 +16,17 @@ export const YAHOO_HOSTS = ['https://query1.finance.yahoo.com', 'https://query2.
 export const YAHOO_MAX_BATCH = 20;
 
 const enc = encodeURIComponent;
+/** 1 Jan 1900, before any listing Yahoo has (IBM's daily history starts in 1962). */
+const MAX_FROM = -2208988800;
 
 /** URL paths (append to a host). */
 export const yahooPath = {
-  chart: (symbol: string, range: string, interval: string, events = false) =>
-    `/v8/finance/chart/${enc(symbol)}?range=${range}&interval=${interval}&includePrePost=false${events ? '&events=div%2Csplits' : ''}`,
+  /**
+   * range=max makes Yahoo ignore the interval and send quarterly candles for most stocks, so
+   * "max" asks for the window from 1900 to tomorrow instead, which keeps daily/weekly/monthly.
+   */
+  chart: (symbol: string, range: string, interval: string, events = false, nowMs = Date.now()) =>
+    `/v8/finance/chart/${enc(symbol)}?${range === 'max' ? `period1=${MAX_FROM}&period2=${Math.floor(nowMs / 1000) + 86400}` : `range=${range}`}&interval=${interval}&includePrePost=false${events ? '&events=div%2Csplits' : ''}`,
   /** Up to YAHOO_MAX_BATCH symbols in one call. */
   spark: (symbols: string[], range: string, interval: string) => `/v7/finance/spark?symbols=${symbols.map(enc).join(',')}&range=${range}&interval=${interval}`,
   search: (symbol: string) => `/v1/finance/search?q=${enc(symbol)}&quotesCount=5&newsCount=0&listsCount=0`,

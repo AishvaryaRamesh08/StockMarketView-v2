@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CandlestickSeries,
   ColorType,
@@ -71,6 +71,12 @@ interface Props {
   tradeLines?: TradeLine[];
   /** On a new series, show only the last this-many candles instead of fitting everything (replay). */
   initialBars?: number;
+  /**
+   * Called when the user scrolls back past the first candle. Return true if older candles are
+   * on the way (a longer period was chosen; the next series then opens on the same dates), false
+   * if there is nothing older, or null to be asked again on the next scroll.
+   */
+  onReachStart?: () => boolean | null;
 }
 
 export interface TradeMark {
@@ -182,6 +188,7 @@ function PriceChartImpl({
   trades = NO_TRADES,
   tradeLines = NO_TRADE_LINES,
   initialBars,
+  onReachStart,
 }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const legend = useRef<HTMLDivElement>(null);
@@ -214,6 +221,28 @@ function PriceChartImpl({
   const candlesRef = useRef(candles);
   candlesRef.current = candles;
   const overlayKey = [...overlays].sort().join(',');
+  const initialBarsRef = useRef(initialBars);
+  initialBarsRef.current = initialBars;
+  const onReachStartRef = useRef(onReachStart);
+  onReachStartRef.current = onReachStart;
+  /** Dates (unix s) to show when the longer series asked for by onReachStart arrives. */
+  const restoreRef = useRef<{ from: number; to: number; at: number } | null>(null);
+  /** The series for which onReachStart said there is nothing older. */
+  const exhaustedRef = useRef('');
+  /** The user scrolled, zoomed or stretched the chart away from its starting view. */
+  const [moved, setMoved] = useState(false);
+
+  /** The starting view: every candle (or the last `initialBars`), prices scaled to fit. */
+  function fitDefault() {
+    const chart = chartRef.current;
+    if (!chart) return;
+    const n = drawn.current.candles.length;
+    const bars = initialBarsRef.current;
+    if (bars && n > bars) chart.timeScale().setVisibleLogicalRange({ from: n - bars, to: n + 3 });
+    else chart.timeScale().fitContent();
+    chart.priceScale('right').applyOptions({ autoScale: true });
+    setMoved(false);
+  }
 
   /* ------------------------------ legend ------------------------------ */
   function renderLegend(index: number | undefined) {
@@ -278,7 +307,9 @@ function PriceChartImpl({
       grid: { vertLines: { color: cssVar('--grid') }, horzLines: { color: cssVar('--grid') } },
       rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.12, bottom: 0.22 } },
       // Keep the same date range in view when the window or sidebar changes width.
-      timeScale: { borderVisible: false, rightOffset: 6, minBarSpacing: 1.5, lockVisibleTimeRangeOnResize: true },
+      // fixLeftEdge: the chart can't be dragged past its first candle into blank space. Reaching
+      // that edge is also what loads older data (onReachStart), until the listing date or Max.
+      timeScale: { borderVisible: false, rightOffset: 6, minBarSpacing: 1.5, lockVisibleTimeRangeOnResize: true, fixLeftEdge: true },
       crosshair: {
         mode: CrosshairMode.Normal,
         vertLine: { color: cssVar('--crosshair'), labelBackgroundColor: cssVar('--surface-3') },
@@ -293,7 +324,61 @@ function PriceChartImpl({
     chartRef.current = chart;
     candleRef.current = candle;
     volumeRef.current = volume;
+
+    // Show "Reset view" once the user drags, scrolls or zooms. Only range changes that happen
+    // while a pointer is down or just after a wheel count, so live updates never trigger it.
+    // (The range callback can arrive a few frames after the input, and kinetic scrolling keeps
+    // moving the chart after the finger lifts, hence the grace period.)
+    let pointerDown = false;
+    let downX = 0;
+    let inputAt = 0;
+    /** At (or near) the first candle: ask for older data, once per series. */
+    const checkStart = (range: { from: number; to: number } | null) => {
+      const { version: v, candles: cs } = drawn.current;
+      // Start a little before the very first candle, so the older data is usually there in time.
+      if (!range || range.from > Math.max(0.5, (range.to - range.from) * 0.08) || !cs.length || !onReachStartRef.current) return;
+      if (restoreRef.current || exhaustedRef.current === v) return;
+      const to = cs[Math.max(0, Math.min(cs.length - 1, Math.floor(range.to)))].t;
+      const more = onReachStartRef.current();
+      if (more) restoreRef.current = { from: cs[0].t, to, at: Date.now() };
+      else if (more === false) exhaustedRef.current = v;
+    };
+    const onRange = (range: { from: number; to: number } | null) => {
+      if (!(pointerDown || Date.now() - inputAt < 1500)) return;
+      setMoved(true);
+      checkStart(range);
+    };
+    const onDown = (e: PointerEvent) => {
+      pointerDown = true;
+      downX = e.clientX;
+    };
+    const onUp = (e: PointerEvent) => {
+      if (!pointerDown) return;
+      pointerDown = false;
+      inputAt = Date.now();
+      // Dragging the price axis switches off auto-scaling without moving the time range.
+      if (chart.priceScale('right').options().autoScale === false) setMoved(true);
+      // The left edge is pinned to the first candle, so a chart already showing it doesn't move:
+      // a clear drag towards older dates there still asks for more (not while drawing).
+      const d = drawingRef.current;
+      if (e.clientX - downX > 40 && !d?.tool && !d?.selectedId) checkStart(chart.timeScale().getVisibleLogicalRange());
+    };
+    const onWheel = (e: WheelEvent) => {
+      inputAt = Date.now();
+      // Zooming out (or scrolling sideways towards older dates) with the first candle on screen.
+      if (e.deltaY > 0 || e.deltaX < 0) checkStart(chart.timeScale().getVisibleLogicalRange());
+    };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(onRange);
+    el.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    el.addEventListener('wheel', onWheel, { passive: true });
     return () => {
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(onRange);
+      el.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      el.removeEventListener('wheel', onWheel);
       chart.remove();
       chartRef.current = null;
       candleRef.current = null;
@@ -389,8 +474,15 @@ function PriceChartImpl({
     // Refit for a new series, or when a refresh replaced it with a different span (new trading day).
     const rolledOver = prev.version === version && prev.candles.length > 0 && candles.length > 0 && prev.candles[0].t !== candles[0].t;
     if ((fittedVersion.current !== version || rolledOver) && candles.length > 0) {
-      if (initialBars && candles.length > initialBars) chart.timeScale().setVisibleLogicalRange({ from: candles.length - initialBars, to: candles.length + 3 });
-      else chart.timeScale().fitContent();
+      const keep = fittedVersion.current !== version ? restoreRef.current : null;
+      restoreRef.current = null;
+      // (A request that took very long, or a different stock opened meanwhile, opens normally.)
+      if (keep && keep.to > keep.from && Date.now() - keep.at < 20_000 && keep.to >= candles[0].t) {
+        // Older candles arrived after scrolling back: stay on the same dates, older ones to the left.
+        chart.priceScale('right').applyOptions({ autoScale: true });
+        chart.timeScale().setVisibleRange({ from: shift(keep.from) as Time, to: shift(keep.to) as Time });
+        setMoved(true);
+      } else fitDefault();
       fittedVersion.current = version;
     }
     renderLegend(undefined);
@@ -651,6 +743,14 @@ function PriceChartImpl({
     <div className={`chart ${compact ? 'compact' : ''}`}>
       <div className="chart-legend" ref={legend} aria-live="off" />
       <div className="chart-canvas" ref={host} />
+      {moved && (
+        <button type="button" className="chart-reset" onClick={fitDefault} title="Go back to the starting view: all candles, prices scaled to fit">
+          <svg viewBox="0 0 16 16" aria-hidden>
+            <path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v3h3" />
+          </svg>
+          Reset view
+        </button>
+      )}
     </div>
   );
 }

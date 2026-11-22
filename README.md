@@ -124,6 +124,14 @@ against TA-Lib ([results](scripts/talib-check/README.md)).
   earliest price available (Max: up to 10 years, or since the stock listed),
   on real split-adjusted closes, against the NIFTY 50 / S&P 500 and a fixed deposit, with XIRR or CAGR and a value
   chart. Dividends, taxes and fees are not included.
+- **Scroll back for older data**: drag (or zoom out) to the first candle and the chart loads the next longer
+  period (1D → 5D → 1M → 3M → 6M → 1Y → 5Y → 10Y → Max), staying on the same dates. The interval only changes when the
+  data source requires it (5-minute candles stop at about 60 days, hourly at about 2 years), giving 5m → 1h → daily →
+  weekly. Each step is one ordinary, edge-cached chart request, at most one every 3 seconds, and only while you scroll.
+  The chart never scrolls into blank space before the first candle; at Max or a stock's listing date it simply stops.
+  **Reset view** (on the chart once you have scrolled or zoomed) brings back the starting view.
+- **Resizable chart**: drag the grip under the chart (or focus it and use the arrow keys) to make it taller or
+  shorter; the height is remembered. Double-click the grip or press Fit to window to go back to filling the screen.
 - **Image export**: download or copy the chart as a PNG with a caption (stock, timeframe, date) and no watermark.
 - **Shareable links**: the address bar always describes the chart on screen (stock, period, interval, indicators,
   compare, layout), and Share copies it. Drawings are not part of links; share them as an image.
@@ -133,7 +141,7 @@ against TA-Lib ([results](scripts/talib-check/README.md)).
   cash, holdings, realised and unrealised P&L, an equity curve and full order history, with JSON export/import and
   reset. Click either P&L card to see which stocks made or lost money. **Trades & P&L** shows, for today, the last
   7 or 30 days or all time, what was invested, what sales brought in and the realised P&L, by stock or by day
-  (in the exchange's own calendar), plus win rate and best/worst sale. Order history shows each sale's P&L. Orders are only checked while the site is open in a tab; fills ignore slippage, fees, dividends and splits.
+  (in the exchange's own calendar), plus win rate and best/worst sale. Order history shows each sale's P&L. Every Portfolio table sorts by any column (click a heading). Orders are only checked while the site is open in a tab; fills ignore slippage, fees, dividends and splits.
 - **Ask AI** (Gemini, bring your own key): type or say “show Reliance for a year with RSI”, “compare TCS with
   Infosys” or “what is a demat account?”. It drives the site through function calling (open charts, add or remove
   indicators, compare, multi-timeframe, quotes, chart summaries, Markets page, watchlist) and answers beginner

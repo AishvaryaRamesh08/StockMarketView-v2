@@ -32,6 +32,7 @@ import { SimilarStocks } from './components/SimilarStocks.tsx';
 import { useReplay } from './hooks/useReplay.ts';
 import { WatchlistPanel } from './components/WatchlistPanel.tsx';
 import { useFillHeight } from './hooks/useFillHeight.ts';
+import { CHART_MAX, CHART_MIN, ChartResizer } from './components/ChartResizer.tsx';
 import { useStickyPanels } from './hooks/useStickyPanels.ts';
 import { MAX_COMPARE, useCompare } from './hooks/useCompare.ts';
 import { useWatchlistBadges } from './hooks/useWatchlistBadges.ts';
@@ -55,7 +56,7 @@ import { setAppearance, useAppearance } from './lib/theme.ts';
 import type { PatternId } from './lib/patterns.ts';
 import { findPeers } from './lib/pulse.ts';
 import type { MarketId } from './lib/types.ts';
-import { INTERVALS, PERIODS, intervalForPeriod, isIntervalId, isIntraday, isPeriodId, periodForInterval, unsupportedReason, type IntervalId, type PeriodId } from './lib/ranges.ts';
+import { INTERVALS, PERIODS, intervalForPeriod, isIntervalId, isIntraday, isPeriodId, periodForInterval, reachedListing, stepBack, unsupportedReason, type IntervalId, type PeriodId } from './lib/ranges.ts';
 import { load, save } from './lib/storage.ts';
 
 type Layout = 'single' | 'multi';
@@ -81,6 +82,8 @@ interface Prefs {
   sideTab: 'trade' | 'chat';
   /** "At a glance" summary expanded under the quote header. */
   glance: boolean;
+  /** Chart height the user dragged to; null fills the window. */
+  chartHeight: number | null;
 }
 
 const PREFS_KEY = 'smv.chart';
@@ -112,6 +115,7 @@ const DEFAULT_PREFS: Prefs = {
   tradeOpen: false,
   sideTab: 'trade',
   glance: false,
+  chartHeight: null,
 };
 
 /** Accepts prefs saved by older versions (Phase 1 saved only symbol/period/interval). */
@@ -129,6 +133,7 @@ function loadPrefs(): Prefs {
   // The last-used tab is deliberately not restored: returning visitors also start on the chart.
   if (typeof raw.tradeOpen === 'boolean') p.tradeOpen = raw.tradeOpen;
   if (typeof raw.glance === 'boolean') p.glance = raw.glance;
+  if (typeof raw.chartHeight === 'number' && Number.isFinite(raw.chartHeight)) p.chartHeight = Math.min(CHART_MAX, Math.max(CHART_MIN, Math.round(raw.chartHeight)));
   if (raw.sideTab === 'trade' || raw.sideTab === 'chat') p.sideTab = raw.sideTab;
   if (raw.lastSymbol && typeof raw.lastSymbol === 'object') {
     const ls = raw.lastSymbol as Record<string, unknown>;
@@ -343,6 +348,18 @@ export function App() {
     [wl],
   );
   const setPeriod = useCallback((p: PeriodId) => update((x) => ({ period: p, interval: intervalForPeriod(p, x.interval) })), [update]);
+  // Scrolling back past the first candle steps to the next longer period (and a coarser interval
+  // when the data source needs one): one ordinary chart request per step, at most one per 3 s.
+  const lastStepAt = useRef(0);
+  const onReachStart = (): boolean | null => {
+    if (chart.status !== 'ready' || !chart.candles.length || Date.now() - lastStepAt.current < 3000) return null;
+    if (reachedListing(period, chart.candles[0].t)) return false;
+    const next = stepBack(period, interval);
+    if (!next) return false;
+    lastStepAt.current = Date.now();
+    update(next);
+    return true;
+  };
   const setInterval = useCallback((i: IntervalId) => update((x) => ({ interval: i, period: periodForInterval(i, x.period) })), [update]);
   const toggleOverlay = useCallback((id: OverlayId) => update((p) => ({ overlays: p.overlays.includes(id) ? p.overlays.filter((o) => o !== id) : [...p.overlays, id] })), [update]);
 
@@ -563,7 +580,7 @@ export function App() {
 
   const glanceParts = useMemo(() => (chart.status === 'ready' ? summarize(chart.candles, interval, quote?.high52) : []), [chart.status, chart.candles, interval, quote?.high52]);
   useStickyPanels();
-  useFillHeight(chartPanel, 320, focusMode ? 12 : 16, [prefs.view, layout, chart.status === 'error', focusMode]);
+  useFillHeight(chartPanel, CHART_MIN, (focusMode ? 12 : 16) + 14, [prefs.view, layout, chart.status === 'error', focusMode], prefs.chartHeight);
 
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -912,6 +929,7 @@ export function App() {
                     onScreenshotReady={onScreenshotReady}
                     trades={trades}
                     tradeLines={tradeLines}
+                    onReachStart={onReachStart}
                   />
                   {textReq && <TextNoteInput key={`${textReq.x},${textReq.y}`} x={textReq.x} y={textReq.y} initial={textReq.initial} onSave={saveNote} onCancel={() => setTextReq(null)} />}
                 </>
@@ -919,6 +937,7 @@ export function App() {
               </Suspense>
             </section>
           )}
+          {layout === 'single' && <ChartResizer target={chartPanel} height={prefs.chartHeight} onChange={(chartHeight) => update({ chartHeight })} />}
 
           {layout === 'single' && !focusMode && (
             <SimilarStocks

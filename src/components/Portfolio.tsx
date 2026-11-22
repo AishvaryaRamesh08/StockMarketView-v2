@@ -7,6 +7,7 @@ import { CURRENCY, DEFAULT_BUDGET, openOrders, summarize, type EquityPoint } fro
 import { cssVar, useAppearanceKey } from '../lib/theme.ts';
 import type { MarketId, Quote } from '../lib/types.ts';
 import { PnlBreakdown, TradesSection } from './PortfolioTrades.tsx';
+import { SortHeader, useSortedRows } from './SortHeader.tsx';
 import { fillsOf, realizedByStock, unrealizedByStock } from '../lib/paperStats.ts';
 
 interface Props {
@@ -64,6 +65,33 @@ export function Portfolio({ market, paper, quotes, onOpen, onToast, onAnalyse }:
   const saleById = useMemo(() => new Map(fills.filter((f) => f.side === 'sell').map((f) => [f.id, f])), [fills]);
   const [breakdown, setBreakdown] = useState<'realized' | 'unrealized' | null>(null);
   const toggleBreakdown = (k: 'realized' | 'unrealized') => setBreakdown((b) => (b === k ? null : k));
+
+  // Every table sorts on every column (click a heading; again to flip; a third time to reset).
+  const holdingRows = positions.map((p) => {
+    const last = paper.prices[p.symbol] ?? null;
+    return { p, last, value: last != null ? last * p.qty : null, pnl: last != null ? (last - p.avgCost) * p.qty : null, q: quotes[p.symbol] };
+  });
+  const holdings = useSortedRows(holdingRows, (r, k: 'stock' | 'qty' | 'avg' | 'last' | 'value' | 'pnl' | 'today') =>
+    k === 'stock' ? ticker(r.p.symbol) : k === 'qty' ? r.p.qty : k === 'avg' ? r.p.avgCost : k === 'last' ? r.last : k === 'value' ? r.value : k === 'pnl' ? r.pnl : (r.q?.changePct ?? null),
+  );
+  const workingSort = useSortedRows(working, (o, k: 'stock' | 'placed' | 'side' | 'order') =>
+    k === 'stock' ? ticker(o.symbol) : k === 'placed' ? o.createdAt : k === 'side' ? o.side : (o.price ?? o.estPrice ?? null),
+  );
+  const historySort = useSortedRows(history, (o, k: 'when' | 'stock' | 'side' | 'qty' | 'price' | 'amount' | 'status') =>
+    k === 'when'
+      ? (o.filledAt ?? o.createdAt)
+      : k === 'stock'
+        ? ticker(o.symbol)
+        : k === 'side'
+          ? o.side
+          : k === 'qty'
+            ? o.qty
+            : k === 'price'
+              ? (o.fillPrice ?? null)
+              : k === 'amount'
+                ? (saleById.get(o.id)?.realized ?? (o.status === 'filled' && o.fillPrice != null ? -o.fillPrice * o.qty : null))
+                : o.status,
+  );
 
   const [budget, setBudget] = useState({ IN: String(s.wallets.IN.start), US: String(s.wallets.US.start) });
   const [confirmReset, setConfirmReset] = useState(false);
@@ -170,18 +198,15 @@ export function Portfolio({ market, paper, quotes, onOpen, onToast, onAnalyse }:
         ) : (
           <div className="pt-table">
             <div className="pt-row pt-head">
-              <span>Stock</span>
-              <span className="num-col">Qty</span>
-              <span className="num-col">Avg cost</span>
-              <span className="num-col">Last</span>
-              <span className="num-col">Value</span>
-              <span className="num-col">P&amp;L</span>
-              <span className="num-col">Today</span>
+              <SortHeader label="Stock" k="stock" sort={holdings} />
+              <SortHeader label="Qty" k="qty" sort={holdings} numeric className="num-col" />
+              <SortHeader label="Avg cost" k="avg" sort={holdings} numeric className="num-col" />
+              <SortHeader label="Last" k="last" sort={holdings} numeric className="num-col" />
+              <SortHeader label="Value" k="value" sort={holdings} numeric className="num-col" />
+              <SortHeader label="P&L" k="pnl" sort={holdings} numeric className="num-col" />
+              <SortHeader label="Today" k="today" sort={holdings} numeric className="num-col" />
             </div>
-            {positions.map((p) => {
-              const last = paper.prices[p.symbol];
-              const pnl = last != null ? (last - p.avgCost) * p.qty : null;
-              const q = quotes[p.symbol];
+            {holdings.rows.map(({ p, last, pnl, q }) => {
               return (
                 <button key={p.symbol} className="pt-row" onClick={() => onOpen(p.symbol)}>
                   <span className="pf-stock">
@@ -212,7 +237,16 @@ export function Portfolio({ market, paper, quotes, onOpen, onToast, onAnalyse }:
             <p className="card-sub">Checked against each new price while this site is open.</p>
           </div>
           <div className="pt-table">
-            {working.map((o) => (
+            <div className="pt-row orders pt-head">
+              <span className="sort-pair">
+                <SortHeader label="Stock" k="stock" sort={workingSort} />
+                <SortHeader label="Placed" k="placed" sort={workingSort} numeric />
+              </span>
+              <SortHeader label="Side" k="side" sort={workingSort} />
+              <SortHeader label="Order price" k="order" sort={workingSort} numeric />
+              <span />
+            </div>
+            {workingSort.rows.map((o) => (
               <div key={o.id} className="pt-row orders">
                 <span className="pf-stock">
                   <b>{ticker(o.symbol)}</b>
@@ -241,15 +275,15 @@ export function Portfolio({ market, paper, quotes, onOpen, onToast, onAnalyse }:
         ) : (
           <div className="pt-table">
             <div className="pt-row history pt-head">
-              <span>When</span>
-              <span>Stock</span>
-              <span>Side</span>
-              <span>Qty</span>
-              <span className="num-col">Price</span>
-              <span className="num-col">Cost / P&amp;L</span>
-              <span>Status</span>
+              <SortHeader label="When" k="when" sort={historySort} numeric />
+              <SortHeader label="Stock" k="stock" sort={historySort} />
+              <SortHeader label="Side" k="side" sort={historySort} />
+              <SortHeader label="Qty" k="qty" sort={historySort} numeric />
+              <SortHeader label="Price" k="price" sort={historySort} numeric className="num-col" />
+              <SortHeader label="Cost / P&L" k="amount" sort={historySort} numeric className="num-col" />
+              <SortHeader label="Status" k="status" sort={historySort} />
             </div>
-            {(showAll ? history : history.slice(0, 15)).map((o) => (
+            {(showAll ? historySort.rows : historySort.rows.slice(0, 15)).map((o) => (
               <div key={o.id} className="pt-row history">
                 <span className="card-sub">{new Date(o.filledAt ?? o.createdAt).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</span>
                 <b>{ticker(o.symbol)}</b>

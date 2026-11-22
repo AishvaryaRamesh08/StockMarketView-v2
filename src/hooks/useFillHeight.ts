@@ -3,12 +3,19 @@ import { useLayoutEffect, type RefObject } from 'react';
 /**
  * Sizes an element to run from where it starts down to the bottom of the window, so the chart
  * (with its time axis) fits on screen without scrolling. Whatever sits above it can wrap onto
- * more lines and the chart shrinks to match; it never goes below `min` pixels.
+ * more lines and the chart shrinks to match; it never goes below `min` pixels. A `fixed` height
+ * (the user dragged the chart's resize grip) replaces the automatic one.
  */
-export function useFillHeight(ref: RefObject<HTMLElement | null>, min: number, bottomGap = 16, deps: unknown[] = []) {
+export function useFillHeight(ref: RefObject<HTMLElement | null>, min: number, bottomGap = 16, deps: unknown[] = [], fixed: number | null = null) {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+    if (fixed != null) {
+      el.style.height = `${Math.max(min, fixed)}px`;
+      return () => {
+        el.style.height = '';
+      };
+    }
     let frame = 0;
     const fit = () => {
       cancelAnimationFrame(frame);
@@ -29,5 +36,5 @@ export function useFillHeight(ref: RefObject<HTMLElement | null>, min: number, b
       window.removeEventListener('resize', fit);
       el.style.height = '';
     };
-  }, [ref, min, bottomGap, ...deps]);
+  }, [ref, min, bottomGap, fixed, ...deps]);
 }

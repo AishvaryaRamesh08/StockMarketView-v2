@@ -3,6 +3,7 @@ import { formatPct, formatPrice } from '../lib/format.ts';
 import { inPeriod, pnlByDay, pnlByStock, tradeStats, type Contribution, type Fill, type Period } from '../lib/paperStats.ts';
 import type { MarketId, Quote } from '../lib/types.ts';
 import { InfoTip } from './InfoTip.tsx';
+import { SortHeader, useSortedRows } from './SortHeader.tsx';
 
 const ticker = (s: string) => s.replace(/\.(NS|BO)$/, '');
 const PERIODS: Array<[Period, string]> = [
@@ -25,6 +26,7 @@ export function PnlBreakdown({ kind, rows, currency, quotes, onOpen, onClose }: 
   const max = Math.max(...rows.map((r) => Math.abs(r.pnl)), 1e-9);
   const gains = rows.filter((r) => r.pnl > 0.005).reduce((a, r) => a + r.pnl, 0);
   const losses = rows.filter((r) => r.pnl < -0.005).reduce((a, r) => a + r.pnl, 0);
+  const sorted = useSortedRows(rows, (r, k: 'stock' | 'pnl') => (k === 'stock' ? ticker(r.symbol) : r.priced === false ? null : r.pnl));
   return (
     <section className="card pnl-breakdown" aria-labelledby="pnl-bd-title">
       <div className="card-head">
@@ -50,7 +52,12 @@ export function PnlBreakdown({ kind, rows, currency, quotes, onOpen, onClose }: 
         <p className="empty-note">{kind === 'realized' ? 'Nothing sold yet. Realised P&L appears once you sell shares.' : 'No holdings.'}</p>
       ) : (
         <div className="bd-list">
-          {rows.map((r) => (
+          <div className="bd-row bd-head pt-head">
+            <SortHeader label="Stock" k="stock" sort={sorted} />
+            <span />
+            <SortHeader label="P&L" k="pnl" sort={sorted} numeric className="num-col" />
+          </div>
+          {sorted.rows.map((r) => (
             <button key={r.symbol} className="bd-row" onClick={() => onOpen(r.symbol)}>
               <span className="pf-stock">
                 <b>{ticker(r.symbol)}</b>
@@ -83,6 +90,12 @@ export function TradesSection({ fills, market, currency, quotes, onOpen }: { fil
   const stats = useMemo(() => tradeStats(inRange), [inRange]);
   const byStock = useMemo(() => pnlByStock(inRange), [inRange]);
   const byDay = useMemo(() => pnlByDay(inRange, market), [inRange, market]);
+  const stockSort = useSortedRows(byStock, (r, k: 'stock' | 'bought' | 'invested' | 'sold' | 'received' | 'realized') =>
+    k === 'stock' ? ticker(r.symbol) : k === 'bought' ? r.boughtQty || null : k === 'invested' ? r.invested || null : k === 'sold' ? r.soldQty || null : k === 'received' ? r.proceeds || null : r.soldQty ? r.realized : null,
+  );
+  const daySort = useSortedRows(byDay, (d, k: 'day' | 'stocks' | 'invested' | 'received' | 'realized') =>
+    k === 'day' ? d.day : k === 'stocks' ? d.symbols.map(ticker).join(', ') : k === 'invested' ? d.invested || null : k === 'received' ? d.proceeds || null : d.proceeds ? d.realized : null,
+  );
   const label = PERIODS.find((p) => p[0] === period)![1].toLowerCase();
 
   return (
@@ -175,14 +188,14 @@ export function TradesSection({ fills, market, currency, quotes, onOpen }: { fil
           {view === 'stock' ? (
             <div className="pt-table" role="group" aria-label="P&L by stock">
               <div className="pt-row trades-row pt-head">
-                <span>Stock</span>
-                <span className="num-col">Bought</span>
-                <span className="num-col">Invested</span>
-                <span className="num-col">Sold</span>
-                <span className="num-col">Received</span>
-                <span className="num-col">Realised P&amp;L</span>
+                <SortHeader label="Stock" k="stock" sort={stockSort} />
+                <SortHeader label="Bought" k="bought" sort={stockSort} numeric className="num-col" />
+                <SortHeader label="Invested" k="invested" sort={stockSort} numeric className="num-col" />
+                <SortHeader label="Sold" k="sold" sort={stockSort} numeric className="num-col" />
+                <SortHeader label="Received" k="received" sort={stockSort} numeric className="num-col" />
+                <SortHeader label="Realised P&L" k="realized" sort={stockSort} numeric className="num-col" />
               </div>
-              {byStock.map((r) => (
+              {stockSort.rows.map((r) => (
                 <button key={r.symbol} className="pt-row trades-row" onClick={() => onOpen(r.symbol)}>
                   <span className="pf-stock">
                     <b>{ticker(r.symbol)}</b>
@@ -211,13 +224,13 @@ export function TradesSection({ fills, market, currency, quotes, onOpen }: { fil
           ) : (
             <div className="pt-table" role="group" aria-label="P&L by day">
               <div className="pt-row days-row pt-head">
-                <span>Day</span>
-                <span>Stocks</span>
-                <span className="num-col">Invested</span>
-                <span className="num-col">Received</span>
-                <span className="num-col">Realised P&amp;L</span>
+                <SortHeader label="Day" k="day" sort={daySort} numeric />
+                <SortHeader label="Stocks" k="stocks" sort={daySort} />
+                <SortHeader label="Invested" k="invested" sort={daySort} numeric className="num-col" />
+                <SortHeader label="Received" k="received" sort={daySort} numeric className="num-col" />
+                <SortHeader label="Realised P&L" k="realized" sort={daySort} numeric className="num-col" />
               </div>
-              {byDay.map((d) => (
+              {daySort.rows.map((d) => (
                 <div key={d.day} className="pt-row days-row">
                   <span>
                     <b>{new Date(`${d.day}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}</b>

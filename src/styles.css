@@ -4243,7 +4243,7 @@ button.pt-row:hover {
 
 /* ================================================================ Portfolio: P&L breakdowns and trades */
 .pt-row.history {
-  grid-template-columns: 120px 90px 64px 80px 100px 120px minmax(0, 1fr);
+  grid-template-columns: 120px 90px 72px 84px 100px 132px minmax(0, 1fr);
 }
 
 .pf-card.clickable {
@@ -5096,4 +5096,197 @@ button.pt-row:hover {
   .welcome-foot .btn {
     flex: none;
   }
+}
+
+/* Sortable table headings (Portfolio). */
+.sort-cell {
+  min-width: 0;
+}
+
+.sort-pair {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sort-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sort-head:hover,
+.sort-head.active {
+  color: var(--text-1);
+}
+
+.sort-head:hover {
+  background: var(--surface-2);
+}
+
+.sort-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.sort-arrow {
+  font-size: 9px;
+  opacity: 0.45;
+}
+
+.sort-head.active .sort-arrow {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.num-col.sort-cell {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.bd-head {
+  cursor: default;
+  font-size: 11px;
+  padding-top: 4px;
+  padding-bottom: 6px;
+}
+
+.bd-head:hover {
+  background: none;
+}
+
+@media (max-width: 860px) {
+  .pt-row.orders.pt-head > :nth-child(3) {
+    grid-column: auto;
+    grid-row: auto;
+    justify-self: end;
+  }
+
+  .pt-row.orders.pt-head > :nth-child(4) {
+    display: none;
+  }
+}
+
+/* Resize grip under the chart. */
+.chart-resizer {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 14px;
+  margin-top: -6px;
+}
+
+.chart-grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 14px;
+  cursor: ns-resize;
+  touch-action: none;
+  border-radius: 6px;
+}
+
+.chart-grip-bar {
+  width: 44px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  transition: background 0.15s, width 0.15s;
+}
+
+.chart-grip:hover .chart-grip-bar,
+.chart-grip:focus-visible .chart-grip-bar,
+.chart-grip:active .chart-grip-bar {
+  width: 64px;
+  background: var(--accent);
+}
+
+.chart-grip:focus-visible {
+  outline: none;
+}
+
+.chart-fit {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-1);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.chart-fit:hover {
+  color: var(--text-1);
+  border-color: var(--accent);
+}
+
+@media (pointer: coarse) {
+  .chart-resizer,
+  .chart-grip {
+    height: 22px;
+  }
+
+  .chart-grip-bar {
+    width: 56px;
+  }
+}
+
+/* Appears on the chart after the user scrolls or zooms it; puts the starting view back. */
+.chart-reset {
+  position: absolute;
+  right: 72px;
+  bottom: 36px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-1);
+  color: var(--text-1);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.chart-reset svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.chart-reset:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.chart.compact .chart-reset {
+  right: 60px;
+  bottom: 30px;
+  padding: 2px 8px;
+  font-size: 11px;
 }

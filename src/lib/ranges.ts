@@ -111,3 +111,49 @@ export function isPeriodId(v: unknown): v is PeriodId {
 export function isIntervalId(v: unknown): v is IntervalId {
   return INTERVALS.some((i) => i.id === v);
 }
+
+/* ------------------------------ scroll-back steps ------------------------------ */
+
+const STEP_ORDER: PeriodId[] = ['1d', '5d', '1mo', '3mo', '6mo', '1y', '5y', '10y', 'max'];
+/** Keep each step's chart under this many candles so it stays quick to draw. */
+const MAX_STEP_BARS = 3000;
+
+/** Rough candle count for a period and interval (trading hours and weekdays only). */
+export function estimateBars(period: PeriodId, interval: IntervalId, now: Date = new Date()): number {
+  const days = periodDays(period, now);
+  if (!Number.isFinite(days)) return Infinity;
+  const sec = INTERVALS.find((i) => i.id === interval)!.seconds;
+  const tradingShare = sec < 86400 ? (5 / 7) * (6.5 / 24) : sec === 86400 ? 5 / 7 : 1;
+  return Math.ceil(((days * 86400) / sec) * tradingShare);
+}
+
+/**
+ * Where scrolling back past the first candle goes next: the next longer period, keeping the
+ * interval when the data source still serves it at that length, otherwise the next coarser one
+ * that does (1D at 5m → 5D at 5m → 1M at 5m → 3M hourly → … → 5Y daily → Max weekly).
+ * null at Max, where there is nothing older to load.
+ */
+export function stepBack(period: PeriodId, interval: IntervalId, now: Date = new Date()): { period: PeriodId; interval: IntervalId } | null {
+  const next = period === 'ytd' ? '1y' : STEP_ORDER[STEP_ORDER.indexOf(period) + 1];
+  if (!next) return null;
+  const from = INTERVALS.findIndex((i) => i.id === interval);
+  const floor = next === 'max' ? INTERVALS.findIndex((i) => i.id === '1wk') : 0;
+  for (const iv of INTERVALS.slice(Math.max(from, floor))) {
+    if (unsupportedReason(next, iv.id, now)) continue;
+    if (next !== 'max' && estimateBars(next, iv.id, now) > MAX_STEP_BARS) continue;
+    return { period: next, interval: iv.id };
+  }
+  return { period: next, interval: defaultInterval(next) };
+}
+
+/**
+ * True when the loaded candles already begin well after the period's start, so the stock's
+ * history (its listing) has been reached and a longer period would bring nothing older.
+ * Only judged for daily-or-longer periods: intraday data is cut by the source, not the listing.
+ */
+export function reachedListing(period: PeriodId, firstCandle: number, nowMs: number = Date.now()): boolean {
+  if (period === 'max') return true;
+  const days = periodDays(period, new Date(nowMs));
+  if (days < 92) return false;
+  return (nowMs / 1000 - firstCandle) / 86400 < days * 0.8;
+}
