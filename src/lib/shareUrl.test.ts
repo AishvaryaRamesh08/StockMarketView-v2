@@ -3,7 +3,7 @@ import { decodeLink, encodeLink } from './shareUrl.ts';
 
 describe('share links', () => {
   it('round-trips a chart', () => {
-    const state = { view: 'chart' as const, symbol: 'RELIANCE.NS', period: '6mo' as const, interval: '1d' as const, overlays: ['sma50' as const, 'rsi' as const], compare: ['TCS.NS', '^NSEI'], layout: 'single' as const };
+    const state = { view: 'chart' as const, symbol: 'RELIANCE.NS', period: '6mo' as const, interval: '1d' as const, overlays: ['sma50' as const, 'rsi' as const], compare: ['TCS.NS', '^NSEI'], compareScale: 'change' as const, layout: 'single' as const };
     const qs = encodeLink(state);
     expect(qs).toBe('s=RELIANCE.NS&p=6mo&i=1d&o=sma50,rsi&c=TCS.NS,^NSEI');
     expect(decodeLink(`?${qs}`)).toEqual(state);
@@ -29,9 +29,19 @@ describe('share links', () => {
   it('drops anything invalid instead of trusting it', () => {
     expect(decodeLink('?s=<script>')).toBeNull();
     const d = decodeLink('?s=AAPL&p=2y&i=3h&o=sma50,bogus,sma50&c=MSFT,AAPL,a%20b,GOOG,AMZN,META,NVDA');
-    expect(d).toEqual({ view: 'chart', symbol: 'AAPL', overlays: ['sma50'], compare: ['MSFT', 'GOOG', 'AMZN', 'META'], layout: 'single' });
+    expect(d).toEqual({ view: 'chart', symbol: 'AAPL', overlays: ['sma50'], compare: ['MSFT', 'GOOG', 'AMZN', 'META'], compareScale: 'change', layout: 'single' });
   });
   it('leaves indicators unchanged when the link does not mention them', () => {
     expect(decodeLink('?s=AAPL')?.overlays).toBeUndefined();
+  });
+});
+
+describe('compare scale in links', () => {
+  it('round-trips "% of high" and drops it without comparisons', () => {
+    const q = encodeLink({ view: 'chart', symbol: 'RELIANCE.NS', compare: ['^NSEI'], compareScale: 'max' });
+    expect(q).toContain('cs=max');
+    expect(decodeLink(q)?.compareScale).toBe('max');
+    expect(encodeLink({ view: 'chart', symbol: 'AAPL', compareScale: 'max' })).not.toContain('cs=');
+    expect(decodeLink('s=AAPL&c=MSFT')?.compareScale).toBe('change');
   });
 });

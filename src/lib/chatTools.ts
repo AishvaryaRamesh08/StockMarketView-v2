@@ -40,15 +40,15 @@ export const TOOLS: FunctionDeclaration[] = [
   },
   {
     name: 'compare',
-    description: 'Overlay up to 4 other stocks or indices on the current chart as % change, to compare performance. An empty list clears the comparison.',
+    description: 'Overlay up to 4 other stocks or indices on the current chart (as % change, or as % of each one\'s high if the user picked that), to compare performance. An empty list clears the comparison.',
     parameters: { type: 'object', properties: { tickers: { type: 'array', items: TICKER, description: 'Up to 4 tickers or company names.' } }, required: ['tickers'] },
   },
   {
     name: 'set_multi_timeframe',
-    description: 'Show one stock as three charts side by side, each with its own candle interval (e.g. 15m, 60m, 1d).',
+    description: 'Show one stock as four charts in a grid, each with its own candle interval (e.g. 15m, 60m, 1d, 1wk).',
     parameters: {
       type: 'object',
-      properties: { ticker: TICKER, intervals: { type: 'array', items: { type: 'string', enum: INTERVAL_IDS }, description: 'Exactly 3 intervals, shortest first.' } },
+      properties: { ticker: TICKER, intervals: { type: 'array', items: { type: 'string', enum: INTERVAL_IDS }, description: 'Up to 4 intervals, shortest first.' } },
       required: ['ticker', 'intervals'],
     },
   },

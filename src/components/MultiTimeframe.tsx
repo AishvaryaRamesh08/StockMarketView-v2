@@ -11,12 +11,12 @@ import type { Frame } from '../lib/frames.ts';
 export { DEFAULT_FRAMES, type Frame } from '../lib/frames.ts';
 
 /**
- * Request budget: three panes polling every 30 s would be 6 requests a minute on their own.
- * Each pane refreshes its candles every minute (every 5 minutes for daily and longer), and the
- * page's batched quote poll moves the last candle every 30 s in between.
+ * Request budget: four panes polling every 30 s would be 8 requests a minute on their own.
+ * Each pane refreshes its candles every 80 seconds (every 5 minutes for daily and longer), and
+ * the page's batched quote poll moves the last candle every 30 s in between.
  */
 export function panePollMs(interval: IntervalId): number {
-  return isIntraday(interval) ? 60_000 : 5 * 60_000;
+  return isIntraday(interval) ? 80_000 : 5 * 60_000;
 }
 
 function Pane({ symbol, frame, index, overlays, quote, onChange }: { symbol: string; frame: Frame; index: number; overlays: ReadonlySet<OverlayId>; quote: Quote | null; onChange: (f: Frame) => void }) {
@@ -70,9 +70,9 @@ function Pane({ symbol, frame, index, overlays, quote, onChange }: { symbol: str
   );
 }
 
-/** The same stock in three timeframes side by side; moving the crosshair on one moves all three. */
+/** The same stock in four timeframes, two by two; moving the crosshair on one moves them all. */
 export function MultiTimeframe({ symbol, frames, overlays, quote, onFramesChange }: { symbol: string; frames: Frame[]; overlays: ReadonlySet<OverlayId>; quote: Quote | null; onFramesChange: (f: Frame[]) => void }) {
-  // Oscillator panes make three small charts unreadable; keep overlays that draw on price.
+  // Oscillator panes make small charts unreadable; keep overlays that draw on price.
   const priceOverlays = useMemo(() => new Set([...overlays].filter((o) => o !== 'rsi' && o !== 'macd')), [overlays]);
   return (
     <div className="mtf">

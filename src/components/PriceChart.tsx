@@ -56,6 +56,12 @@ interface Props {
   events?: CorporateEvent[];
   levels?: Level[];
   compare?: CompareLine[];
+  /**
+   * How compared lines share one axis: 'change' rebases everything to % change from the first
+   * visible candle; 'max' divides each series by its own highest close in the period, so every
+   * line peaks at 100% and the shapes can be laid over each other.
+   */
+  compareScale?: CompareScale;
   /** True while the last candle is still forming; patterns are only marked on completed candles. */
   lastBarLive?: boolean;
   /** Charts sharing a group move their crosshairs together (multi-timeframe view). */
@@ -77,6 +83,21 @@ interface Props {
    * if there is nothing older, or null to be asked again on the next scroll.
    */
   onReachStart?: () => boolean | null;
+}
+
+export type CompareScale = 'change' | 'max';
+
+/** Drawings with every price multiplied by k (k = 1 leaves them as they are). */
+function scaleDrawings(list: Drawing[], k: number): Drawing[] {
+  if (k === 1) return list;
+  return list.map((d) => ({ ...d, a: { ...d.a, p: d.a.p * k }, ...(d.b ? { b: { ...d.b, p: d.b.p * k } } : {}) }));
+}
+
+/** Highest close in a series (0 when empty). */
+export function maxClose(candles: readonly Candle[]): number {
+  let m = 0;
+  for (const c of candles) if (c.c > m) m = c.c;
+  return m;
 }
 
 export interface TradeMark {
@@ -170,26 +191,39 @@ const NO_TRADES: TradeMark[] = [];
 const NO_TRADE_LINES: TradeLine[] = [];
 
 function PriceChartImpl({
-  candles,
-  version,
+  candles: rawCandles,
+  version: rawVersion,
   timezone,
   currency,
   digits,
   intraday,
   overlays = EMPTY_SET,
   events = NO_EVENTS,
-  levels = NO_LEVELS,
+  levels: rawLevels = NO_LEVELS,
   compare = NO_COMPARE,
+  compareScale = 'change',
   lastBarLive = false,
   syncGroup,
   compact = false,
   drawing,
   onScreenshotReady,
   trades = NO_TRADES,
-  tradeLines = NO_TRADE_LINES,
+  tradeLines: rawTradeLines = NO_TRADE_LINES,
   initialBars,
   onReachStart,
 }: Props) {
+  // "% of high" compare scale: the whole chart works in % of this stock's highest close, so the
+  // axis ticks fall on round percentages. pctK converts a price into that unit (1 = prices).
+  const pctTop = compareScale === 'max' && compare.length > 0 ? maxClose(rawCandles) : 0;
+  const pctK = pctTop > 0 ? 100 / pctTop : 1;
+  const pctKRef = useRef(pctK);
+  pctKRef.current = pctK;
+  const candles = useMemo(() => (pctK === 1 ? rawCandles : rawCandles.map((c) => ({ ...c, o: c.o * pctK, h: c.h * pctK, l: c.l * pctK, c: c.c * pctK }))), [rawCandles, pctK]);
+  const levels = useMemo(() => (pctK === 1 ? rawLevels : rawLevels.map((l) => ({ ...l, price: l.price * pctK }))), [rawLevels, pctK]);
+  const tradeLines = useMemo(() => (pctK === 1 ? rawTradeLines : rawTradeLines.map((l) => ({ ...l, price: l.price * pctK }))), [rawTradeLines, pctK]);
+  // Switching the scale on or off is a new series (refit); a new high only redraws it.
+  const version = pctK === 1 ? rawVersion : `${rawVersion}|pct`;
+  const drawnK = useRef(1);
   const host = useRef<HTMLDivElement>(null);
   const legend = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -204,6 +238,7 @@ function PriceChartImpl({
   const byTime = useRef(new Map<number, number>()); // shifted time -> candle index
   const studiesRef = useRef<StudySpec[]>([]);
   const compareRef = useRef<CompareLine[]>([]);
+  const compareScaleRef = useRef<CompareScale>('change');
   const patternsAt = useRef(new Map<number, PatternId[]>());
   const cloudRef = useRef<CloudPrimitive | null>(null);
   const controllerRef = useRef<DrawingController | null>(null);
@@ -256,7 +291,7 @@ function PriceChartImpl({
       return;
     }
     const { currency: cur, digits: d, compact: small } = fmt.current;
-    const p = (v: number) => formatPrice(v, cur, d, false);
+    const p = (v: number) => (pctKRef.current !== 1 ? `${v.toFixed(1)}%` : formatPrice(v, cur, d, false));
     const dir = bar.c >= bar.o ? 'up' : 'down';
     let html =
       `<div class="lg-row"><span>O <b class="${dir}">${p(bar.o)}</b></span><span>H <b class="${dir}">${p(bar.h)}</b></span>` +
@@ -269,8 +304,15 @@ function PriceChartImpl({
       const v = s.values[i];
       items.push(`<span class="lg-item"><i style="background:${s.color}"></i>${s.label} <b>${v == null ? '—' : p(v)}</b></span>`);
     }
+    const byMax = pctKRef.current !== 1;
     for (const c of compareRef.current) {
       const ci = indexAtOrBefore(c.candles, bar.t);
+      if (byMax) {
+        const top = maxClose(c.candles);
+        const v = ci >= 0 && top ? (c.candles[ci].c / top) * 100 : null;
+        items.push(`<span class="lg-item"><i style="background:${c.color}"></i>${c.label} <b>${v == null ? '—' : `${v.toFixed(1)}%`}</b></span>`);
+        continue;
+      }
       const base = c.candles[0]?.c;
       const v = ci >= 0 && base ? ((c.candles[ci].c - base) / base) * 100 : null;
       items.push(`<span class="lg-item"><i style="background:${c.color}"></i>${c.label} <b>${v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`}</b></span>`);
@@ -440,7 +482,8 @@ function PriceChartImpl({
   /* ---------------------------- instrument format ---------------------------- */
   useEffect(() => {
     const fmtOpts = { type: 'price' as const, precision: digits, minMove: 1 / 10 ** digits };
-    candleRef.current?.applyOptions({ priceFormat: fmtOpts });
+    // (The "% of high" compare scale sets its own axis format.)
+    if (pctKRef.current === 1) candleRef.current?.applyOptions({ priceFormat: fmtOpts });
     chartRef.current?.applyOptions({ timeScale: { timeVisible: intraday, secondsVisible: false } });
   }, [digits, intraday]);
 
@@ -457,7 +500,8 @@ function PriceChartImpl({
     const toVol = (c: Candle): HistogramData => ({ time: shift(c.t), value: c.v, color: c.c >= c.o ? upVol : downVol });
 
     const prev = drawn.current;
-    const diff = prev.version === version ? diffTail(prev.candles, candles) : ({ kind: 'reset' } as const);
+    const diff = prev.version === version && drawnK.current === pctK ? diffTail(prev.candles, candles) : ({ kind: 'reset' } as const);
+    drawnK.current = pctK;
     if (diff.kind === 'reset') {
       candle.setData(candles.map(toBar));
       volume.setData(candles.map(toVol));
@@ -486,7 +530,7 @@ function PriceChartImpl({
       fittedVersion.current = version;
     }
     renderLegend(undefined);
-  }, [candles, version, shift, initialBars]);
+  }, [candles, version, shift, initialBars, pctK]);
 
   /* ------------------------------- studies ------------------------------- */
   useEffect(() => {
@@ -676,6 +720,9 @@ function PriceChartImpl({
     const candle = candleRef.current;
     if (!chart || !candle) return;
     compareRef.current = compare;
+    compareScaleRef.current = compareScale;
+    const byMax = pctK !== 1;
+    const pct = (p: number) => `${p.toFixed(1)}%`;
     const want = new Set(compare.map((c) => c.symbol));
     for (const [sym, api] of compareSeries.current) {
       if (!want.has(sym)) {
@@ -690,12 +737,17 @@ function PriceChartImpl({
         compareSeries.current.set(c.symbol, api);
       }
       const sh = makeShifter(c.timezone);
-      api.setData(c.candles.map((k) => ({ time: sh(k.t), value: k.c })));
+      // "% of high": each line as a share of its own highest close.
+      const k = byMax ? 100 / (maxClose(c.candles) || 1) : 1;
+      api.setData(c.candles.map((x) => ({ time: sh(x.t), value: x.c * k })));
+      api.applyOptions({ priceFormat: byMax ? { type: 'custom', minMove: 0.1, formatter: pct } : { type: 'price', precision: 2, minMove: 0.01 } });
     }
-    // Percentage mode rebases every series to its first visible value: a fair comparison.
-    candle.priceScale().applyOptions({ mode: compare.length ? PriceScaleMode.Percentage : PriceScaleMode.Normal });
+    // % change: Percentage mode rebases every series to its first visible value, a fair comparison.
+    candle.priceScale().applyOptions({ mode: compare.length && !byMax ? PriceScaleMode.Percentage : PriceScaleMode.Normal });
+    const d = fmt.current.digits;
+    candle.applyOptions({ priceFormat: byMax ? { type: 'custom', minMove: 0.1, formatter: pct } : { type: 'price', precision: d, minMove: 1 / 10 ** d } });
     renderLegend(undefined);
-  }, [compare]);
+  }, [compare, compareScale, pctK]);
 
   /* ------------------------------- drawings ------------------------------- */
   useEffect(() => {
@@ -712,8 +764,9 @@ function PriceChartImpl({
         return c ? chart.timeScale().timeToCoordinate(shiftRef.current(c.t)) : null;
       },
       colors: () => ({ line: cssVar('--accent'), fill: cssVar('--accent-soft'), text: cssVar('--text-1'), labelBg: cssVar('--surface-1'), handle: cssVar('--border-strong') }),
-      formatPrice: (p) => formatPrice(p, fmt.current.currency, fmt.current.digits, false),
-      onCommit: (next) => drawingRef.current?.onCommit(next),
+      formatPrice: (p) => (pctKRef.current !== 1 ? `${p.toFixed(1)}%` : formatPrice(p, fmt.current.currency, fmt.current.digits, false)),
+      // Drawings are stored in real prices; on the "% of high" scale they are drawn in %.
+      onCommit: (next) => drawingRef.current?.onCommit(scaleDrawings(next, 1 / pctKRef.current)),
       onSelect: (id) => drawingRef.current?.onSelect(id),
       onToolDone: () => drawingRef.current?.onToolDone(),
       onTextRequest: (req) => drawingRef.current?.onTextRequest(req),
@@ -726,8 +779,8 @@ function PriceChartImpl({
   }, [drawingEnabled]);
 
   useEffect(() => {
-    if (drawing) controllerRef.current?.setState({ drawings: drawing.drawings, tool: drawing.tool, selectedId: drawing.selectedId });
-  }, [drawing?.drawings, drawing?.tool, drawing?.selectedId]);
+    if (drawing) controllerRef.current?.setState({ drawings: scaleDrawings(drawing.drawings, pctK), tool: drawing.tool, selectedId: drawing.selectedId });
+  }, [drawing?.drawings, drawing?.tool, drawing?.selectedId, pctK]);
 
   /* --------------------------- image export hook --------------------------- */
   useEffect(() => {

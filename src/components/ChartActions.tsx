@@ -15,6 +15,8 @@ interface Props {
   onDownload: () => void;
   onCopyImage: () => void;
   onShare: () => void;
+  /** 'row' above the chart (phones), or 'rail': a slim column down the chart's left edge. */
+  variant?: 'row' | 'rail';
 }
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -36,7 +38,7 @@ const TOOL_HINT: Record<DrawTool, string> = {
   text: 'Click where the note should go',
 };
 
-/** Drawing tools, undo/redo, image export and share, in one row above the chart. */
+/** Drawing tools, undo/redo, image export and share: a row above the chart, or a rail beside it. */
 export function ChartActions(p: Props) {
   const [confirmClear, setConfirmClear] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -50,7 +52,7 @@ export function ChartActions(p: Props) {
   }, [exportOpen]);
 
   return (
-    <div className="chart-actions">
+    <div className={`chart-actions ${p.variant ?? 'row'}`}>
       <div className="draw-tools" role="toolbar" aria-label="Drawing tools">
         {(Object.keys(TOOL_LABEL) as DrawTool[]).map((t) => (
           <button

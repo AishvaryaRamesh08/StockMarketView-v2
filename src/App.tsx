@@ -3,6 +3,8 @@ import { AppearanceMenu } from './components/AppearanceMenu.tsx';
 import { ChartActions, TextNoteInput } from './components/ChartActions.tsx';
 import { ChartSummary, GlanceToggle } from './components/ChartSummary.tsx';
 import { summarize } from './lib/summary.ts';
+import { StockDetails } from './components/StockDetails.tsx';
+import { WIDE_QUERY, useMediaQuery } from './hooks/useMediaQuery.ts';
 import type { TextRequest } from './components/drawingController.ts';
 import { ChartToolbar } from './components/ChartToolbar.tsx';
 import { IndexStrip, STRIP_INDICES } from './components/IndexStrip.tsx';
@@ -11,9 +13,9 @@ import { MarketPulse } from './components/MarketPulse.tsx';
 import { TradePanel } from './components/TradePanel.tsx';
 import { useChat } from './hooks/useChat.ts';
 import { useChatTools } from './hooks/useChatTools.ts';
-import type { TradeLine, TradeMark } from './components/PriceChart.tsx';
+import type { CompareScale, TradeLine, TradeMark } from './components/PriceChart.tsx';
 import { MarketStatusPill } from './components/MarketStatusPills.tsx';
-import { DEFAULT_FRAMES, type Frame } from './lib/frames.ts';
+import { DEFAULT_FRAMES, upgradeFrames, type Frame } from './lib/frames.ts';
 
 // Loaded on demand, so the Markets landing page doesn't download the chart library or panels it doesn't show.
 const PriceChart = lazy(() => import('./components/PriceChart.tsx').then((m) => ({ default: m.PriceChart })));
@@ -24,7 +26,7 @@ const PatternTrackRecord = lazy(() => import('./components/PatternTrackRecord.ts
 const WhatIf = lazy(() => import('./components/WhatIf.tsx').then((m) => ({ default: m.WhatIf })));
 const ReplayBar = lazy(() => import('./components/ReplayBar.tsx').then((m) => ({ default: m.ReplayBar })));
 const Welcome = lazy(() => import('./components/Welcome.tsx').then((m) => ({ default: m.Welcome })));
-import { ActiveOverlays, OverlayMenu } from './components/OverlayMenu.tsx';
+import { OverlayMenu } from './components/OverlayMenu.tsx';
 import { QuoteHeader } from './components/QuoteHeader.tsx';
 import { SearchPalette, rememberRecent, type PaletteAction, type SearchMode } from './components/SearchPalette.tsx';
 import { POPULAR } from './lib/search.ts';
@@ -68,6 +70,8 @@ interface Prefs {
   interval: IntervalId;
   overlays: OverlayId[];
   compare: string[];
+  /** Compared lines as % change from the first candle, or as % of each one's own high. */
+  compareScale: CompareScale;
   layout: Layout;
   frames: Frame[];
   sidebar: boolean;
@@ -82,6 +86,8 @@ interface Prefs {
   sideTab: 'trade' | 'chat';
   /** "At a glance" summary expanded under the quote header. */
   glance: boolean;
+  /** On wide screens, keep the stock's numbers in a Details column on the right of the chart. */
+  details: boolean;
   /** Chart height the user dragged to; null fills the window. */
   chartHeight: number | null;
 }
@@ -104,6 +110,7 @@ const DEFAULT_PREFS: Prefs = {
   interval: '1d',
   overlays: DEFAULT_OVERLAYS,
   compare: [],
+  compareScale: 'change',
   layout: 'single',
   frames: DEFAULT_FRAMES,
   sidebar: true,
@@ -115,6 +122,7 @@ const DEFAULT_PREFS: Prefs = {
   tradeOpen: false,
   sideTab: 'trade',
   glance: false,
+  details: true,
   chartHeight: null,
 };
 
@@ -128,11 +136,13 @@ function loadPrefs(): Prefs {
   if (Array.isArray(raw.overlays)) p.overlays = raw.overlays.filter(isOverlayId);
   if (Array.isArray(raw.compare)) p.compare = raw.compare.filter((s): s is string => typeof s === 'string').slice(0, MAX_COMPARE);
   if (raw.layout === 'single' || raw.layout === 'multi') p.layout = raw.layout;
-  if (Array.isArray(raw.frames) && raw.frames.length === 3 && raw.frames.every((f) => isPeriodId(f?.period) && isIntervalId(f?.interval))) p.frames = raw.frames as Frame[];
+  if (Array.isArray(raw.frames) && raw.frames.length >= 1 && raw.frames.every((f) => isPeriodId(f?.period) && isIntervalId(f?.interval))) p.frames = upgradeFrames(raw.frames as Frame[]);
   if (typeof raw.sidebar === 'boolean') p.sidebar = raw.sidebar;
   // The last-used tab is deliberately not restored: returning visitors also start on the chart.
   if (typeof raw.tradeOpen === 'boolean') p.tradeOpen = raw.tradeOpen;
   if (typeof raw.glance === 'boolean') p.glance = raw.glance;
+  if (typeof raw.details === 'boolean') p.details = raw.details;
+  if (raw.compareScale === 'max' || raw.compareScale === 'change') p.compareScale = raw.compareScale;
   if (typeof raw.chartHeight === 'number' && Number.isFinite(raw.chartHeight)) p.chartHeight = Math.min(CHART_MAX, Math.max(CHART_MIN, Math.round(raw.chartHeight)));
   if (raw.sideTab === 'trade' || raw.sideTab === 'chat') p.sideTab = raw.sideTab;
   if (raw.lastSymbol && typeof raw.lastSymbol === 'object') {
@@ -157,6 +167,7 @@ function applyLink(p: Prefs, link: LinkState | null): Prefs {
   if (unsupportedReason(next.period, next.interval)) next.interval = intervalForPeriod(next.period, next.interval);
   if (link.overlays) next.overlays = link.overlays;
   if (link.compare) next.compare = link.compare;
+  if (link.compareScale) next.compareScale = link.compareScale;
   if (link.layout) next.layout = link.layout;
   return next;
 }
@@ -167,7 +178,7 @@ function linkFor(p: Prefs): string {
       ? { view: 'markets', market: p.market }
       : p.view === 'portfolio'
         ? { view: 'portfolio', market: p.market }
-      : { view: 'chart', symbol: p.symbol, period: p.period, interval: p.interval, overlays: p.overlays, compare: p.compare, layout: p.layout },
+      : { view: 'chart', symbol: p.symbol, period: p.period, interval: p.interval, overlays: p.overlays, compare: p.compare, compareScale: p.compareScale, layout: p.layout },
   );
 }
 
@@ -465,7 +476,7 @@ export function App() {
         ? { id: 'palette', label: 'Use blue / orange colours (colour-blind friendly)', keywords: 'color blind accessibility palette', run: () => setAppearance({ palette: 'cb' }) }
         : { id: 'palette', label: 'Use green / red colours', keywords: 'color palette classic', run: () => setAppearance({ palette: 'classic' }) },
       prefs.layout === 'single'
-        ? { id: 'layout', label: 'Multi-timeframe view (three charts)', keywords: 'layout mtf split', run: () => update({ view: 'chart', layout: 'multi' }) }
+        ? { id: 'layout', label: 'Multi-timeframe view (four charts)', keywords: 'layout mtf split', run: () => update({ view: 'chart', layout: 'multi' }) }
         : { id: 'layout', label: 'Single chart view', keywords: 'layout one', run: () => update({ view: 'chart', layout: 'single' }) },
       { id: 'sidebar', label: prefs.sidebar ? 'Hide watchlist' : 'Show watchlist', keywords: 'sidebar panel', run: () => update((p) => ({ sidebar: !p.sidebar })) },
       { id: 'compare', label: 'Compare with another stock…', keywords: 'overlay versus vs', run: () => setTimeout(() => setSearch('compare'), 0) },
@@ -551,6 +562,13 @@ export function App() {
   const focusMode = focus && prefs.view === 'chart';
   const replaying = replayOn && prefs.view === 'chart' && layout === 'single';
   const replay = useReplay(symbol, interval, marketOf(symbol), replaying);
+  // Wide screens: the stock's numbers live in a Details column on the right, keeping the space
+  // above the chart to the name and price. Trade and Ask AI share that column as tabs.
+  const wide = useMediaQuery(WIDE_QUERY);
+  const detailsOn = wide && prefs.view === 'chart' && prefs.details && !focusMode && !replay;
+  const detailsShown = detailsOn && !tradeVisible;
+  const sideVisible = tradeVisible || detailsShown;
+  const sideActive: 'details' | 'trade' | 'chat' = tradeVisible ? sideTab : 'details';
   const replayTrades = useMemo<TradeMark[]>(() => (replay ? replay.account.trades.map((t) => ({ t: t.t, side: t.side, qty: t.qty })) : []), [replay?.account.trades]);
   const replayLines = useMemo<TradeLine[]>(() => (replay && replay.account.qty ? [{ price: replay.account.avg, title: `Avg cost (${replay.account.qty})`, kind: 'avg' }] : []), [replay?.account.qty, replay?.account.avg]);
   // Replay: → next candle, ← back, space play/pause, Esc leaves replay.
@@ -586,6 +604,36 @@ export function App() {
 
   const panel = (onClose?: () => void) => (
     <WatchlistPanel wl={wl} quotes={quotes} patterns={badges} current={symbol} onSelect={selectSymbol} onAdd={() => setSearch('watchlist')} onClose={onClose} />
+  );
+
+  // Drawing tools: a slim rail down the chart's left edge (a row above it on phones, via CSS).
+  const showDrawTools = layout === 'single' && chart.status !== 'error' && !replay;
+  const drawTools = (variant: 'row' | 'rail') => (
+              <ChartActions
+                variant={variant}
+                tool={tool}
+                onTool={(t) => {
+                  setTool(t);
+                  setSelectedId(null);
+                }}
+                hasSelection={!!selectedId}
+                drawingCount={draw.drawings.length}
+                canUndo={draw.canUndo}
+                canRedo={draw.canRedo}
+                onUndo={draw.undo}
+                onRedo={draw.redo}
+                onDelete={() => {
+                  if (selectedId) draw.remove(selectedId);
+                  setSelectedId(null);
+                }}
+                onClear={() => {
+                  draw.clear();
+                  setSelectedId(null);
+                }}
+                onDownload={onDownload}
+                onCopyImage={onCopyImage}
+                onShare={onShare}
+              />
   );
 
   return (
@@ -664,7 +712,7 @@ export function App() {
 
       {!focusMode && <IndexStrip quotes={quotes} active={symbol} onSelect={selectSymbol} />}
 
-      <div className={`body ${prefs.sidebar && !focusMode ? 'with-sidebar' : ''} ${tradeVisible ? 'with-trade' : ''}`}>
+      <div className={`body ${prefs.sidebar && !focusMode ? 'with-sidebar' : ''} ${sideVisible ? 'with-trade' : ''}`}>
         {prefs.sidebar && !focusMode && <div className="sidebar-desktop">{panel()}</div>}
 
         {prefs.view === 'markets' ? (
@@ -713,18 +761,34 @@ export function App() {
                 watched={watched}
                 watchlistName={wl.active.name}
                 onToggleWatch={() => wl.toggle(symbol)}
-                extra={<GlanceToggle parts={glanceParts} open={prefs.glance} onToggle={() => update((p) => ({ glance: !p.glance }))} />}
+                compact={detailsOn}
+                extra={
+                  detailsOn ? null : (
+                    <>
+                      <GlanceToggle parts={glanceParts} open={prefs.glance} onToggle={() => update((p) => ({ glance: !p.glance }))} />
+                      {wide && prefs.view === 'chart' && !replay && (
+                        <button className="glance-toggle" onClick={() => update({ details: true })} title="Move these numbers to a column on the right, leaving the chart area clean">
+                          Details panel ›
+                        </button>
+                      )}
+                    </>
+                  )
+                }
               />
-              {prefs.glance && <ChartSummary parts={glanceParts} />}
+              {!detailsOn && prefs.glance && <ChartSummary parts={glanceParts} />}
             </>
           )}
 
 
-          <div className={`toolbar-row ${replay ? 'replaying' : ''}`}>
-            {layout === 'single' ? <ChartToolbar period={period} interval={interval} onPeriod={setPeriod} onInterval={setInterval} /> : <div className="toolbar-hint">Each chart has its own period and interval. Move the crosshair on one to line up all three.</div>}
-          </div>
+          {layout === 'multi' && (
+            <div className="toolbar-row">
+              <div className="toolbar-hint">Each chart has its own period and interval. Move the crosshair on one to line up all four.</div>
+            </div>
+          )}
 
-          <div className="actions-row">
+          {/* One row: period, interval and the chart tools, so the chart starts higher up. */}
+          <div className={`actions-row ${replay ? 'replaying' : ''}`}>
+            {layout === 'single' && <ChartToolbar period={period} interval={interval} onPeriod={setPeriod} onInterval={setInterval} />}
             <div className="tools">
               {!replay && (
               <button
@@ -765,7 +829,7 @@ export function App() {
                 </button>
               )}
               {layout === 'single' && !replay && (
-                <button className="tool-btn" aria-label="Compare with other stocks" onClick={() => setSearch('compare')} disabled={prefs.compare.length >= MAX_COMPARE} title={prefs.compare.length >= MAX_COMPARE ? `Up to ${MAX_COMPARE} comparisons` : 'Overlay other stocks as % change'}>
+                <button className="tool-btn" aria-label="Compare with other stocks" onClick={() => setSearch('compare')} disabled={prefs.compare.length >= MAX_COMPARE} title={prefs.compare.length >= MAX_COMPARE ? `Up to ${MAX_COMPARE} comparisons` : 'Overlay other stocks or indices (e.g. NIFTY 50) on this chart'}>
                   <svg viewBox="0 0 20 20" aria-hidden>
                     <path d="M3 14l4-5 3 3 6-7M3 17h14" />
                   </svg>
@@ -778,41 +842,17 @@ export function App() {
                     <rect x="3" y="4" width="14" height="12" rx="1.5" />
                   </svg>
                 </button>
-                <button role="radio" aria-checked={layout === 'multi'} className={layout === 'multi' ? 'active' : ''} onClick={() => update({ layout: 'multi' })} title="Multi-timeframe: three charts side by side">
+                <button role="radio" aria-checked={layout === 'multi'} className={layout === 'multi' ? 'active' : ''} onClick={() => update({ layout: 'multi' })} title="Multi-timeframe: 15-minute, hourly, daily and weekly charts together">
                   <svg viewBox="0 0 20 20" aria-hidden>
-                    <rect x="2" y="4" width="4.5" height="12" rx="1" />
-                    <rect x="7.75" y="4" width="4.5" height="12" rx="1" />
-                    <rect x="13.5" y="4" width="4.5" height="12" rx="1" />
+                    <rect x="3" y="3.5" width="6.25" height="5.75" rx="1" />
+                    <rect x="10.75" y="3.5" width="6.25" height="5.75" rx="1" />
+                    <rect x="3" y="10.75" width="6.25" height="5.75" rx="1" />
+                    <rect x="10.75" y="10.75" width="6.25" height="5.75" rx="1" />
                   </svg>
                 </button>
               </div>
             </div>
-            {layout === 'single' && chart.status !== 'error' && !replay && (
-              <ChartActions
-                tool={tool}
-                onTool={(t) => {
-                  setTool(t);
-                  setSelectedId(null);
-                }}
-                hasSelection={!!selectedId}
-                drawingCount={draw.drawings.length}
-                canUndo={draw.canUndo}
-                canRedo={draw.canRedo}
-                onUndo={draw.undo}
-                onRedo={draw.redo}
-                onDelete={() => {
-                  if (selectedId) draw.remove(selectedId);
-                  setSelectedId(null);
-                }}
-                onClear={() => {
-                  draw.clear();
-                  setSelectedId(null);
-                }}
-                onDownload={onDownload}
-                onCopyImage={onCopyImage}
-                onShare={onShare}
-              />
-            )}
+            {showDrawTools && drawTools('row')}
             <button
               className={`tool-btn focus-btn ${focusMode ? 'pressed' : ''}`}
               onClick={() => setFocus((f) => !f)}
@@ -826,16 +866,28 @@ export function App() {
             </button>
           </div>
 
-          {(overlays.size > 0 || (layout === 'single' && prefs.compare.length > 0)) && (
+          {layout === 'single' && prefs.compare.length > 0 && (
             <div className="chip-rows">
               {layout === 'single' && prefs.compare.length > 0 && (
                 <div className="active-overlays">
                   <span className="row-label">Comparing</span>
+                  <div className="segmented text compare-scale" role="radiogroup" aria-label="Compare scale">
+                    <InfoTip text="Each line as % change from the first candle in view: who gained or lost more.">
+                      <button role="radio" aria-checked={prefs.compareScale === 'change'} className={prefs.compareScale === 'change' ? 'active' : ''} onClick={() => update({ compareScale: 'change' })}>
+                        % change
+                      </button>
+                    </InfoTip>
+                    <InfoTip text="Each line divided by its own highest close in this period, so every line tops out at 100%. Good for comparing the shape of the moves, e.g. Reliance against the NIFTY 50.">
+                      <button role="radio" aria-checked={prefs.compareScale === 'max'} className={prefs.compareScale === 'max' ? 'active' : ''} onClick={() => update({ compareScale: 'max' })}>
+                        % of high
+                      </button>
+                    </InfoTip>
+                  </div>
                   {prefs.compare.map((s) => {
                     const line = compareLines.find((l) => l.symbol === s);
                     const bad = compareFailed.includes(s);
                     return (
-                      <InfoTip key={s} text={bad ? "Couldn't load this symbol." : 'Shown as % change from the first visible candle, so stocks at very different prices line up.'}>
+                      <InfoTip key={s} text={bad ? "Couldn't load this symbol." : prefs.compareScale === 'max' ? 'Shown as % of its own high in this period, so every line peaks at 100%.' : 'Shown as % change from the first visible candle, so stocks at very different prices line up.'}>
                         <span className={`overlay-chip ${bad ? 'muted' : ''}`} tabIndex={0}>
                           <span className="swatch" style={{ background: line?.color ?? 'var(--text-3)' }} />
                           {line?.label ?? s.replace(/\.(NS|BO)$/, '').replace(/^\^/, '')}
@@ -848,7 +900,6 @@ export function App() {
                   })}
                 </div>
               )}
-              <ActiveOverlays active={overlays} intraday={intraday} barCount={chart.candles.length} onToggle={toggleOverlay} />
             </div>
           )}
 
@@ -857,7 +908,9 @@ export function App() {
               <MultiTimeframe symbol={symbol} frames={prefs.frames} overlays={overlays} quote={quotes[symbol] ?? null} onFramesChange={(frames) => update({ frames })} />
             </Suspense>
           ) : (
-            <section className="chart-panel" aria-label="Price chart" ref={chartPanel}>
+            <section className={`chart-panel ${showDrawTools ? 'has-rail' : ''}`} aria-label="Price chart" ref={chartPanel}>
+              {showDrawTools && drawTools('rail')}
+              <div className="chart-stage">
               <Suspense fallback={<div className="chart-skeleton skeleton" aria-label="Loading chart" />}>
               {replay ? (
                 replay.status === 'ready' ? (
@@ -924,6 +977,7 @@ export function App() {
                     events={chart.events}
                     levels={levels}
                     compare={compareLines}
+                    compareScale={prefs.compareScale}
                     lastBarLive={chart.marketOpen}
                     drawing={drawingProps}
                     onScreenshotReady={onScreenshotReady}
@@ -935,6 +989,7 @@ export function App() {
                 </>
               )}
               </Suspense>
+              </div>
             </section>
           )}
           {layout === 'single' && <ChartResizer target={chartPanel} height={prefs.chartHeight} onChange={(chartHeight) => update({ chartHeight })} />}
@@ -960,25 +1015,37 @@ export function App() {
         </main>
         )}
 
-        {tradeVisible && (
+        {sideVisible && (
           <div className="trade-dock" onMouseDown={(e) => e.target === e.currentTarget && update({ tradeOpen: false })}>
             <div className="side-panel">
               <div className="side-tabs" role="tablist" aria-label="Side panel">
+                {detailsOn && (
+                  <button role="tab" aria-selected={sideActive === 'details'} className={sideActive === 'details' ? 'active' : ''} onClick={() => update({ tradeOpen: false })}>
+                    Details
+                  </button>
+                )}
                 {prefs.view === 'chart' && (
-                  <button role="tab" aria-selected={sideTab === 'trade'} className={sideTab === 'trade' ? 'active' : ''} onClick={() => update({ sideTab: 'trade' })}>
+                  <button role="tab" aria-selected={sideActive === 'trade'} className={sideActive === 'trade' ? 'active' : ''} onClick={() => update({ tradeOpen: true, sideTab: 'trade' })}>
                     Trade
                   </button>
                 )}
-                <button role="tab" aria-selected={sideTab === 'chat'} className={sideTab === 'chat' ? 'active' : ''} onClick={() => update({ sideTab: 'chat' })}>
+                <button role="tab" aria-selected={sideActive === 'chat'} className={sideActive === 'chat' ? 'active' : ''} onClick={() => update({ tradeOpen: true, sideTab: 'chat' })}>
                   Ask AI
                 </button>
-                <button className="icon-btn side-close" onClick={() => update({ tradeOpen: false })} aria-label="Close panel" title="Close">
+                <button
+                  className="icon-btn side-close"
+                  onClick={() => update(sideActive === 'details' ? { details: false } : { tradeOpen: false })}
+                  aria-label={sideActive === 'details' ? 'Close details column' : 'Close panel'}
+                  title={sideActive === 'details' ? 'Close: the numbers go back above the chart' : detailsOn ? 'Close (back to Details)' : 'Close'}
+                >
                   <svg viewBox="0 0 16 16" aria-hidden>
                     <path d="M4 4l8 8M12 4l-8 8" />
                   </svg>
                 </button>
               </div>
-              {sideTab === 'trade' ? (
+              {sideActive === 'details' ? (
+                <StockDetails quote={quote} profile={profile} glance={glanceParts} />
+              ) : sideActive === 'trade' ? (
                 <TradePanel
                   symbol={symbol}
                   market={marketOf(symbol)}

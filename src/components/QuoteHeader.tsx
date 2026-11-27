@@ -19,6 +19,8 @@ interface Props {
   onToggleWatch: () => void;
   /** Shown at the end of the name line (the "At a glance" toggle). */
   extra?: ReactNode;
+  /** Name and price only: the numbers and sector are in the Details column on the right. */
+  compact?: boolean;
 }
 
 /** Briefly flashes green/red when the price changes. */
@@ -65,9 +67,8 @@ function Freshness({ symbol, lastUpdated, refreshError, quote }: { symbol: strin
   );
 }
 
-export function QuoteHeader({ symbol, quote, profile, loading, lastUpdated, refreshError, watched, watchlistName, onToggleWatch, extra }: Props) {
+export function QuoteHeader({ symbol, quote, profile, loading, lastUpdated, refreshError, watched, watchlistName, onToggleWatch, extra, compact = false }: Props) {
   const flash = useFlash(quote?.price);
-  const fade = useScrollFade<HTMLDListElement>();
   const market = marketOf(symbol);
 
   if (loading && !quote) {
@@ -87,13 +88,9 @@ export function QuoteHeader({ symbol, quote, profile, loading, lastUpdated, refr
 
   const digits = digitsFor(quote.priceHint, quote.price);
   const dir = quote.change == null ? '' : quote.change >= 0 ? 'up' : 'down';
-  const range52 =
-    quote.high52 != null && quote.low52 != null && quote.price != null && quote.high52 > quote.low52
-      ? Math.min(100, Math.max(0, ((quote.price - quote.low52) / (quote.high52 - quote.low52)) * 100))
-      : null;
 
   return (
-    <header className="quote-header">
+    <header className={`quote-header ${compact ? 'compact' : ''}`}>
       <div className="quote-title">
         <h1 title={quote.name}>{quote.name}</h1>
         <button
@@ -113,7 +110,7 @@ export function QuoteHeader({ symbol, quote, profile, loading, lastUpdated, refr
           <span className="badge subtle">{quote.currency}</span>
           <MarketStatusPill market={market} compact />
         </span>
-        {profile?.sector && (
+        {!compact && profile?.sector && (
           <span className="quote-sector" title={profile.industry ? `${profile.sector} · ${profile.industry}` : profile.sector}>
             {profile.sector}
             {profile.industry && <span className="dd-sub"> · {profile.industry}</span>}
@@ -133,56 +130,72 @@ export function QuoteHeader({ symbol, quote, profile, loading, lastUpdated, refr
         <Freshness symbol={symbol} lastUpdated={lastUpdated} refreshError={refreshError} quote={quote} />
       </div>
 
-      <dl className="quote-stats" ref={fade}>
+      {!compact && <QuoteStats quote={quote} profile={profile} />}
+    </header>
+  );
+}
+
+/**
+ * Day range, previous close, volume, 52-week range, market cap and P/E. A sideways strip under
+ * the price, or a list in the Details column (`vertical`).
+ */
+export function QuoteStats({ quote, profile, vertical = false }: { quote: Quote; profile: Profile | null; vertical?: boolean }) {
+  const fade = useScrollFade<HTMLDListElement>();
+  const digits = digitsFor(quote.priceHint, quote.price);
+  const range52 =
+    quote.high52 != null && quote.low52 != null && quote.price != null && quote.high52 > quote.low52
+      ? Math.min(100, Math.max(0, ((quote.price - quote.low52) / (quote.high52 - quote.low52)) * 100))
+      : null;
+  return (
+      <dl className={`quote-stats ${vertical ? 'vertical' : ''}`} ref={vertical ? undefined : fade}>
+      <div>
+        <dt>Day range</dt>
+        <dd className="num">
+          {formatPrice(quote.dayLow, quote.currency, digits, false)} – {formatPrice(quote.dayHigh, quote.currency, digits, false)}
+        </dd>
+      </div>
+      <div>
+        <dt>Prev close</dt>
+        <dd className="num">{formatPrice(quote.prevClose, quote.currency, digits, false)}</dd>
+      </div>
+      {quote.volume != null && quote.type !== 'INDEX' && (
         <div>
-          <dt>Day range</dt>
+          <dt>Volume</dt>
+          <dd className="num">{formatVolume(quote.volume, quote.currency)}</dd>
+        </div>
+      )}
+      {range52 != null && (
+        <div className="range52">
+          <dt>52-week range</dt>
           <dd className="num">
-            {formatPrice(quote.dayLow, quote.currency, digits, false)} – {formatPrice(quote.dayHigh, quote.currency, digits, false)}
+            <span>{formatPrice(quote.low52, quote.currency, digits, false)}</span>
+            <span className="range-bar" aria-hidden>
+              <span className="range-marker" style={{ left: `${range52}%` }} />
+            </span>
+            <span>{formatPrice(quote.high52, quote.currency, digits, false)}</span>
           </dd>
         </div>
+      )}
+      {profile?.marketCap != null && (
         <div>
-          <dt>Prev close</dt>
-          <dd className="num">{formatPrice(quote.prevClose, quote.currency, digits, false)}</dd>
+          <dt>
+            <InfoTip text="Market capitalisation: share price × number of shares, the total value the market puts on the company.">
+              <span tabIndex={0}>Market cap</span>
+            </InfoTip>
+          </dt>
+          <dd className="num">{formatMarketCap(profile.marketCap, quote.currency)}</dd>
         </div>
-        {quote.volume != null && quote.type !== 'INDEX' && (
-          <div>
-            <dt>Volume</dt>
-            <dd className="num">{formatVolume(quote.volume, quote.currency)}</dd>
-          </div>
-        )}
-        {range52 != null && (
-          <div className="range52">
-            <dt>52-week range</dt>
-            <dd className="num">
-              <span>{formatPrice(quote.low52, quote.currency, digits, false)}</span>
-              <span className="range-bar" aria-hidden>
-                <span className="range-marker" style={{ left: `${range52}%` }} />
-              </span>
-              <span>{formatPrice(quote.high52, quote.currency, digits, false)}</span>
-            </dd>
-          </div>
-        )}
-        {profile?.marketCap != null && (
-          <div>
-            <dt>
-              <InfoTip text="Market capitalisation: share price × number of shares, the total value the market puts on the company.">
-                <span tabIndex={0}>Market cap</span>
-              </InfoTip>
-            </dt>
-            <dd className="num">{formatMarketCap(profile.marketCap, quote.currency)}</dd>
-          </div>
-        )}
-        {profile?.pe != null && (
-          <div>
-            <dt>
-              <InfoTip text="Price-to-earnings ratio (trailing 12 months): how many years of current profits the share price represents. Compare it with similar companies, not across sectors.">
-                <span tabIndex={0}>P/E</span>
-              </InfoTip>
-            </dt>
-            <dd className="num">{profile.pe.toFixed(1)}</dd>
-          </div>
-        )}
-      </dl>
-    </header>
+      )}
+      {profile?.pe != null && (
+        <div>
+          <dt>
+            <InfoTip text="Price-to-earnings ratio (trailing 12 months): how many years of current profits the share price represents. Compare it with similar companies, not across sectors.">
+              <span tabIndex={0}>P/E</span>
+            </InfoTip>
+          </dt>
+          <dd className="num">{profile.pe.toFixed(1)}</dd>
+        </div>
+      )}
+    </dl>
   );
 }

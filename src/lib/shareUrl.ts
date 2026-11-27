@@ -20,6 +20,8 @@ export interface LinkState {
   interval?: IntervalId;
   overlays?: OverlayId[];
   compare?: string[];
+  /** How compared lines are scaled: % change (default) or % of each one's high. */
+  compareScale?: 'change' | 'max';
   layout?: 'single' | 'multi';
 }
 
@@ -40,6 +42,7 @@ export function encodeLink(s: LinkState): string {
   if (s.interval) add('i', s.interval);
   if (s.overlays) add('o', s.overlays.join(','));
   if (s.compare?.length) add('c', s.compare.join(','));
+  if (s.compare?.length && s.compareScale === 'max') add('cs', 'max');
   if (s.layout === 'multi') add('l', 'multi');
   return parts.join('&');
 }
@@ -66,6 +69,7 @@ export function decodeLink(search: string): LinkState | null {
   if (q.has('c')) {
     out.compare = Array.from(new Set((q.get('c') ?? '').split(',').filter((c) => SYMBOL_RE.test(c) && c !== symbol))).slice(0, MAX_COMPARE);
   }
+  if (out.compare?.length) out.compareScale = q.get('cs') === 'max' ? 'max' : 'change';
   if (q.get('l') === 'multi') out.layout = 'multi';
   else out.layout = 'single';
   return out;

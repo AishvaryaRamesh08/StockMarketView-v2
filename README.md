@@ -98,8 +98,13 @@ against TA-Lib ([results](scripts/talib-check/README.md)).
 - **Hover explanations** for every indicator, pattern and stat, written for beginners.
 - **Key levels**: 52-week high/low, previous day high/low, automatic support and resistance.
 - **Fundamentals**: market cap, P/E, sector and industry; dividends and splits marked on the chart.
-- **Compare** up to 4 stocks or indices as % change.
-- **Multi-timeframe**: three charts of the same stock with synced crosshairs.
+- **Compare** up to 4 stocks or indices on one chart (e.g. Reliance against the NIFTY 50), either as % change from
+  the first candle or as **% of each one's high** in the period, so every line peaks at 100% and the shapes line up.
+- **Multi-timeframe** (optional; the single chart is the default): four charts of the same stock in a 2×2 grid,
+  15-minute, hourly, daily and weekly by default, each changeable, with synced crosshairs.
+- **Details column**: on wide screens (1280 px and up) the day range, volume, 52-week range, market cap, P/E,
+  sector and the plain-English summary sit in a column to the right of the chart, sharing it with Trade and Ask AI,
+  so the space above the chart holds only the name and price. Close it to bring the numbers back above the chart.
 - **Watchlists**: multiple named lists with live prices, sparklines and pattern badges.
 - **Markets page**: index cards, market breadth, and the NIFTY 500 / S&P 500
   top gainers and losers, refreshed every 2 minutes while the market is open.
@@ -134,7 +139,7 @@ against TA-Lib ([results](scripts/talib-check/README.md)).
   shorter; the height is remembered. Double-click the grip or press Fit to window to go back to filling the screen.
 - **Image export**: download or copy the chart as a PNG with a caption (stock, timeframe, date) and no watermark.
 - **Shareable links**: the address bar always describes the chart on screen (stock, period, interval, indicators,
-  compare, layout), and Share copies it. Drawings are not part of links; share them as an image.
+  compare and its scale, layout), and Share copies it. Drawings are not part of links; share them as an image.
 - **Paper trading**: virtual INR and USD wallets (₹10,00,000 and $100,000 by default), market, limit and stop
   orders, long-only and whole shares. Market orders placed while a market is closed fill at the first price after
   the open. Fills, working orders and average cost are drawn on the chart. A Portfolio page shows account value,
@@ -191,7 +196,7 @@ Yahoo Finance chart + spark endpoints
   |---|---|
   | Chart | 4: newest candles every 30 s, one batched quote request every 30 s |
   | Chart with comparisons | 5: plus one batched request for all compared stocks every minute |
-  | Multi-timeframe | about 4: each pane refreshes every minute (daily panes every 5 minutes), and the batched quotes keep each pane's last candle current in between |
+  | Multi-timeframe | about 4: each of the four panes refreshes every 80 seconds (daily and weekly panes every 5 minutes), and the batched quotes keep each pane's last candle current in between |
   | Markets | about 2.5: batched quotes every 30 s, gainers and losers every 2 minutes, news hourly |
   | Watchlist badges | read from the daily pattern scan, one cached request per market every 15 minutes |
 

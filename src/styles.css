@@ -314,14 +314,15 @@ kbd {
 .index-chip {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  padding: 9px 12px;
+  gap: 6px;
+  padding: 4px 10px;
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
   cursor: pointer;
   white-space: nowrap;
-  font-size: 12.5px;
+  font-size: 11.5px;
+  line-height: 1.35;
 }
 
 .index-chip:hover {
@@ -1540,7 +1541,7 @@ kbd {
 .mtf {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   min-height: 460px;
 }
@@ -1575,7 +1576,8 @@ kbd {
 .mtf-chart {
   position: relative;
   flex: 1;
-  min-height: 380px;
+  min-height: 240px;
+  height: max(240px, calc((100vh - 420px) / 2));
 }
 
 /* ------------------------------------------------------------- mobile sheet */
@@ -4621,7 +4623,7 @@ button.pt-row:hover {
 }
 
 /* ================================================================ Replay */
-.toolbar-row.replaying .chart-toolbar > .chip-group:first-child {
+.actions-row.replaying .chart-toolbar > .chip-group:first-child {
   display: none;
 }
 
@@ -5289,4 +5291,279 @@ button.pt-row:hover {
   bottom: 30px;
   padding: 2px 8px;
   font-size: 11px;
+}
+
+/* Details column (wide screens): the stock's numbers beside the chart instead of above it. */
+.quote-header.compact {
+  grid-template-areas: 'title price';
+}
+
+.details-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 14px 16px 20px;
+  overflow-y: auto;
+}
+
+.details-panel h3 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+
+.quote-stats.vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.quote-stats.vertical > div {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.quote-stats.vertical > div:last-child {
+  border-bottom: none;
+}
+
+.quote-stats.vertical dt {
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.quote-stats.vertical dd {
+  text-align: right;
+  font-size: 13px;
+}
+
+.quote-stats.vertical .range52 {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.quote-stats.vertical .range52 dd {
+  justify-content: space-between;
+}
+
+.quote-stats.vertical .range-bar {
+  flex: 1;
+  width: auto;
+}
+
+.details-glance {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.details-glance li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.details-glance .glance-dot {
+  flex: none;
+  transform: translateY(-1px);
+}
+
+.compare-scale {
+  margin-right: 4px;
+}
+
+.compare-scale button {
+  padding: 3px 9px;
+  font-size: 12px;
+}
+
+/* A narrower chart area (sidebar and Details column both open): the drawing and image tools take
+   their own line instead of splitting across two, and full-screen stays on the first line. */
+@container workspace (max-width: 1100px) {
+  .actions-row .chart-actions {
+    flex: 1 1 100%;
+    order: 2;
+  }
+
+  .actions-row .focus-btn {
+    order: 1;
+    margin-left: auto;
+  }
+}
+
+/* ------------------------------------------------------------- compact chart chrome
+   Period, interval and tools share one row; drawing tools sit in a rail down the chart's left
+   edge (a row above the chart in a narrow column, where a rail would cost too much width). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.actions-row .chart-toolbar {
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.interval-select {
+  padding: 0;
+}
+
+.interval-select select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 100%;
+  min-height: 30px;
+  padding: 0 26px 0 10px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent-soft)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%238790a3' stroke-width='1.6'/%3E%3C/svg%3E")
+    no-repeat right 8px center / 11px;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.interval-select select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.chart-stage {
+  position: absolute;
+  inset: 0;
+}
+
+.chart-panel.has-rail .chart-stage {
+  left: 42px;
+}
+
+.chart-actions.rail {
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 42px;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 0;
+  border-right: 1px solid var(--border);
+}
+
+.chart-actions.rail .draw-tools {
+  flex-direction: column;
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+.chart-actions.rail .draw-tools .icon-btn {
+  width: 32px;
+  height: 30px;
+}
+
+.chart-actions.rail .draw-tools .divider {
+  width: 18px;
+  height: 1px;
+  margin: 4px 0;
+}
+
+.chart-actions.rail .text-btn {
+  font-size: 10.5px;
+  padding: 0 2px;
+  width: 36px;
+  white-space: normal;
+  line-height: 1.15;
+}
+
+.chart-actions.rail .share-tools {
+  margin: auto 0 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chart-actions.rail .share-tools .tool-btn {
+  width: 32px;
+  height: 30px;
+  padding: 0;
+  justify-content: center;
+}
+
+.chart-actions.rail .share-tools .btn-label {
+  display: none;
+}
+
+.chart-actions.rail .export-menu {
+  top: auto;
+  bottom: 0;
+  left: calc(100% + 6px);
+  right: auto;
+}
+
+.chart-actions.rail .tool-hint {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 8px;
+  z-index: 5;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.chart-actions.row {
+  display: none;
+}
+
+@container workspace (max-width: 620px) {
+  .chart-actions.rail {
+    display: none;
+  }
+
+  .chart-actions.row {
+    display: flex;
+  }
+
+  .chart-panel.has-rail .chart-stage {
+    left: 0;
+  }
+}
+
+.actions-row .focus-btn {
+  margin-left: auto;
+}
+
+.interval-select {
+  flex: none;
+  align-self: flex-start;
+  width: auto;
 }

@@ -126,8 +126,8 @@ export function useChatTools(deps: Deps) {
       case 'set_multi_timeframe': {
         const e = await resolve(a.ticker);
         const asked = (Array.isArray(a.intervals) ? a.intervals : []).map(toInterval).filter((i): i is IntervalId => !!i);
-        const defaults: IntervalId[] = ['15m', '60m', '1d'];
-        const intervals = [...asked, ...defaults.filter((d) => !asked.includes(d))].slice(0, 3);
+        const defaults: IntervalId[] = ['15m', '60m', '1d', '1wk'];
+        const intervals = [...asked, ...defaults.filter((d) => !asked.includes(d))].slice(0, 4);
         const frames: Frame[] = intervals.map((i) => ({ interval: i, period: periodFor(i) }));
         track(act().showMultiTimeframe(e.symbol, frames));
         return { result: { ok: true, symbol: e.symbol, frames }, note: `Multi-timeframe ${short(e.symbol)}: ${intervals.map(intervalLabel).join(', ')}` };

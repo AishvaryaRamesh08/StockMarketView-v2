@@ -31,6 +31,8 @@ const FEATURES: Array<[string, string]> = [
   ['Search', 'any NSE, BSE or US stock'],
   ['IN / US', '(top right) switches the whole site between India and the US'],
   ['Hover or tap', 'anything underlined or marked ? for an explanation'],
+  ['Compare', 'stocks and indices on one chart (e.g. Reliance vs NIFTY 50), as % change or % of each one’s high'],
+  ['Four timeframes', '(the grid button) 15-minute, hourly, daily and weekly charts together'],
   ['Star', 'stocks to keep them in your watchlist'],
   ['Draw, save, share', 'trend lines, chart images and links'],
   ['Replay', 'past markets candle by candle and practise trading'],
